@@ -4,6 +4,11 @@ pipeline:
     volumes: [ '/var/run/docker.sock:/var/run/docker.sock' ]
     repo: notify-dev
 
+  test:
+    image: notify-dev
+    method: GET
+    webhook_url: ${CI_SYSTEM_LINK}/api/badges/${DRONE_REPO}/status.svg
+
   publish:
     image: spritsail/docker-publish
     when: { branch: [ master ], event: [ push, tag, deployment ] }
