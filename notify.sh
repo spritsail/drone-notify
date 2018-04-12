@@ -16,8 +16,8 @@ REQ_METHOD="${PLUGIN_METHOD:-POST}"
 WEBHOOK_URL="${WEBHOOK_URL:-$PLUGIN_WEBHOOK_URL}"
 NOTIFY_TOKEN="${NOTIFY_TOKEN:-$PLUGIN_NOTIFY_TOKEN}"
 
-[ -z "$NOTIFY_TOKEN" ] && error "Missing required 'notify_token' argument"
 [ -z "$WEBHOOK_URL" ] && error "Missing required 'webhook_url' argument"
+[ -n "$NOTIFY_TOKEN" ] && AUTH_HEADER="Authorization: $NOTIFY_TOKEN"
 
 payload="$(env | sed -n 's/^DRONE_//p' \
                | awk -F= '{ eq=index($0,"="); print tolower(substr($0,0,eq-1)) substr($0,eq) }' \
@@ -27,6 +27,6 @@ curl $PLUGIN_CURL_OPTS \
     -fsSL \
     -X $REQ_METHOD \
     -H "Content-Type: application/json" \
-    -H "Authorization: $NOTIFY_TOKEN" \
+    -H "$AUTH_HEADER" \
     -d "$payload" \
     $WEBHOOK_URL
