@@ -19,7 +19,7 @@ RUN apk add --no-cache libc-dev gcc make \
 
 # =============
 
-FROM alpine:3.7
+FROM spritsail/alpine:3.7
 
 ARG JO_VER
 ARG NOTIFY_VER
@@ -33,11 +33,9 @@ LABEL maintainer="Spritsail <notify@spritsail.io>" \
       io.spritsail.version.jo=${JO_VER} \
       io.spritsail.version.notify=${NOTIFY_VER}
 
-
-
 COPY --from=builder /tmp/jo /usr/bin/jo
 ADD *.sh /usr/local/bin/
 RUN chmod 755 /usr/local/bin/*.sh && \
     apk --no-cache add jq curl
 
-ENTRYPOINT [ "/usr/local/bin/notify.sh" ]
+CMD [ "/usr/local/bin/notify.sh" ]
