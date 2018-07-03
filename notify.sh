@@ -25,6 +25,10 @@ payload="$(env | sed -n 's/^DRONE_//p' \
 
 curl $PLUGIN_CURL_OPTS \
     -fsSL \
+    --retry 20 \
+    --max-time 10 \
+    --retry-max-time 120 \
+    --retry-connrefused \
     -X $REQ_METHOD \
     -H "Content-Type: application/json" \
     -H "$AUTH_HEADER" \
