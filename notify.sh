@@ -23,7 +23,8 @@ NOTIFY_TOKEN="${NOTIFY_TOKEN:-$PLUGIN_NOTIFY_TOKEN}"
 
 payload="$(env \
     | sed -n 's/^DRONE_//p' \
-    | awk -F= -vORS="\0" '{ eq=index($0,"="); print tolower(substr($0,0,eq-1)) substr($0,eq) }' \
+    | awk -F= '{ eq=index($0,"="); print tolower(substr($0,0,eq-1)) substr($0,eq) }' \
+    | tr '\n' '\0' \
     | xargs -0 jo \
         tag=$PLUGIN_TAG \
         data=$(echo "$PLUGIN_DATA" | tr ',' '\0' | xargs -0 jo -a) \
