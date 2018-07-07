@@ -29,6 +29,8 @@ pipeline:
 ```
 
 ### Available options
+- `tag`           An extra string passed as `"tag": ".."` in the request body
+- `data`          An extra array of strings passed as `"data": [..]` in the request body
 - `webhook_url`   full URL of webhook endpoint. Can be a secret or a value. _required_
 - `notify_token`  the `Authorization` header value _optional_
 - `method`        request method. _default `POST`_
