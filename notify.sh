@@ -26,7 +26,7 @@ payload="$(env \
     | awk -F= '{ eq=index($0,"="); print tolower(substr($0,0,eq-1)) substr($0,eq) }' \
     | tr '\n' '\0' \
     | xargs -0 jo \
-        tag=$PLUGIN_TAG \
+        tag=${PLUGIN_TAG:-null} \
         data=$(echo "$PLUGIN_DATA" | tr ',' '\0' | xargs -0 jo -a) \
 )"
 
