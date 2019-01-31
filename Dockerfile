@@ -1,7 +1,7 @@
-ARG JO_VER=1.1
+ARG JO_VER=1.2
 ARG NOTIFY_VER=1.0
 
-FROM alpine:3.8 as builder
+FROM alpine:3.9 as builder
 
 ARG JO_VER
 
@@ -19,7 +19,7 @@ RUN apk add --no-cache libc-dev gcc make \
 
 # =============
 
-FROM spritsail/alpine:3.8
+FROM spritsail/alpine:3.9
 
 ARG JO_VER
 ARG NOTIFY_VER
