@@ -21,6 +21,7 @@ def doNotify(success, build):
 
     try:
         commit_firstline, commit_rest = build["build"]["message"].split("\n", 1)
+        commit_rest = "-----\n" + commit_rest.strip()
     except ValueError:
         commit_firstline = build["build"]["message"]
         commit_rest = ""
