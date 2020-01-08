@@ -78,4 +78,4 @@ if __name__ == '__main__':
     if (not ttoken and not tchat):
         print("Env Var not set")
         exit()
-    app.run()
+    app.run(host='0.0.0.0')
