@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from flask import Flask, request, abort
+import sys
 import logging
 import json
 import configparser
@@ -74,7 +75,11 @@ def webhook():
 
 if __name__ == '__main__':
     config = configparser.ConfigParser()
-    config.read('drone.cfg')
+    try:
+        cfg_path = sys.argv[1]
+    except IndexError:
+        cfg_path = "./drone.cfg"
+    config.read(cfg_path)
     ttoken = config['Telegram']['token']
     tchat =  config['Telegram']['chatid']
     app.run()
