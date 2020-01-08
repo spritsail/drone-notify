@@ -18,4 +18,4 @@ RUN apk add --no-cache py3-pip \
 
 VOLUME ["/config"]
 
-CMD ["/usr/bin/python3", "/app/main.py", "/config/drone.cfg"]
+CMD ["/usr/bin/python3", "-u", "/app/main.py"]
