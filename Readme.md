@@ -4,4 +4,7 @@ This script sets up a webhook listener for Drone's global webhooks. It then send
 
 ## Running
 
-Run the docker container, add the config as in the example. Set the env var `DRONE_WEBHOOK_ENDPOINT` inside your drone-server to point to the URL where the script is running.
+Run the docker container with the following environment variables set:
+ * `TELEGRAM_TOKEN` = Bot Token
+ * `TELEGRAM_CHAT` = Chat ID
+

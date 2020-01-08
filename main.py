@@ -1,10 +1,9 @@
 #!/usr/bin/python3
 
 from flask import Flask, request, abort
-import sys
 import logging
 import json
-import configparser
+import os
 import requests
 
 app = Flask(__name__)
@@ -74,12 +73,9 @@ def webhook():
         abort(400)
 
 if __name__ == '__main__':
-    config = configparser.ConfigParser()
-    try:
-        cfg_path = sys.argv[1]
-    except IndexError:
-        cfg_path = "./drone.cfg"
-    config.read(cfg_path)
-    ttoken = config['Telegram']['token']
-    tchat =  config['Telegram']['chatid']
+    ttoken = os.environ.get('TELEGRAM_TOKEN')
+    tchat = os.environ.get('TELEGRAM_CHAT')
+    if (not ttoken and not tchat):
+        print("Env Var not set")
+        exit()
     app.run()
