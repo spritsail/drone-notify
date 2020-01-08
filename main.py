@@ -52,6 +52,10 @@ def webhook():
             print("{} - Got a webook for {} build {}".format(request.remote_addr, json['repo']['slug'], json['repo']['build']['number']))
             success = True
             for stage in json['build']['stages']:
+                if stage['status'] == 'pending':
+                    # Set succeess to false as theres still something pending
+                    success = False
+                    break
                 for step in stage['steps']:
                     status = step['status']
                     if status == 'failure':
