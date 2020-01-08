@@ -9,6 +9,8 @@ LABEL maintainer="Adam Dodman <dronenotify@adam-ant.co.uk>" \
       org.label-schema.description="Turn Drone global webhooks into Telegram notifications" \
       org.label-schema.version=${NOTIFY_VER}
 
+WORKDIR /app/
+
 COPY requirements.txt main.py /app/
 
 RUN apk add --no-cache py3-pip \
@@ -16,4 +18,4 @@ RUN apk add --no-cache py3-pip \
 
 VOLUME ["/config"]
 
-TCMD ["/usr/bin/python3", "/app/main.py", "/config/drone.cfg"]
+CMD ["/usr/bin/python3", "/app/main.py", "/config/drone.cfg"]
