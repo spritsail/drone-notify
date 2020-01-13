@@ -54,13 +54,13 @@ def webhook():
         print("[{}] - {} - Got a webook for {} build {} ({})".format(getDate(), request.remote_addr, json['repo']['slug'], json['build']['number'], json['build']['status']))
         if (json["build"]["status"] == "success"):
             doNotify(True, json)
-            return "success", 200
+            return "success"
         elif (json["build"]["status"] == "failure"):
             doNotify(False, json)
-            return "failure", 200
+            return "failure"
 
     # Default to blackholing it. Om nom nom.
-    return '', 200
+    return "accepted"
 
 if __name__ == '__main__':
     ttoken = os.environ.get('TELEGRAM_TOKEN')
