@@ -1,15 +1,11 @@
 #!/usr/bin/python3
 
-from flask import Flask, request, abort
+from bottle import run, post, request
 import datetime
 import logging
 import json
 import os
 import requests
-
-app = Flask(__name__)
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
 
 def getDate():
     return datetime.datetime.now().strftime("%c")
@@ -51,37 +47,34 @@ def doNotify(success, build):
     except:
          print("Warning: Telegram notify error!")
 
-@app.route('/hook', methods=['POST'])
+@post('/hook')
 def webhook():
-    if request.method == 'POST':
-        json = request.json
-        if (json['event'] == 'build') and (json['action'] == 'updated'):
-            print("[{}] - {} - Got a webook for {} build {} ({})".format(getDate(), request.remote_addr, json['repo']['slug'], json['build']['number'], json['build']['status']))
-            success = True
-            for stage in json['build']['stages']:
-                if stage['status'] == 'pending':
-                    # Set succeess to false as theres still something pending
+    json = request.json
+    if (json['event'] == 'build') and (json['action'] == 'updated'):
+        print("[{}] - {} - Got a webook for {} build {} ({})".format(getDate(), request.remote_addr, json['repo']['slug'], json['build']['number'], json['build']['status']))
+        success = True
+        for stage in json['build']['stages']:
+            if stage['status'] == 'pending':
+                # Set succeess to false as theres still something pending
+                success = False
+                break
+            for step in stage['steps']:
+                status = step['status']
+                if status == 'failure':
+                    doNotify(False, json)
+                    return 'epicfail', 200
+                if status != 'success':
                     success = False
-                    break
-                for step in stage['steps']:
-                    status = step['status']
-                    if status == 'failure':
-                        doNotify(False, json)
-                        return 'epicfail', 200
-                    if status != 'success':
-                        success = False
 
-            if success:
-                # All the steps are called success. nice.
-                doNotify(True, json)
-                return 'winrar', 200
-            else:
-                # Not a success or a failure, so still going or cancelled. No notify.
-                return 'mmmkay', 200
-        # Default to blackholing it. Om nom nom.
-        return '', 200
-    else:
-        abort(400)
+        if success:
+            # All the steps are called success. nice.
+            doNotify(True, json)
+            return 'winrar', 200
+        else:
+            # Not a success or a failure, so still going or cancelled. No notify.
+            return 'mmmkay', 200
+    # Default to blackholing it. Om nom nom.
+    return '', 200
 
 if __name__ == '__main__':
     ttoken = os.environ.get('TELEGRAM_TOKEN')
@@ -90,4 +83,4 @@ if __name__ == '__main__':
         print("Env Var not set")
         exit()
     print("[{}] - Started Drone Notify. Notification Channel: {}".format(getDate(), tchat))
-    app.run(host='0.0.0.0')
+    run(host='0.0.0.0', port=5000, quiet=True)
