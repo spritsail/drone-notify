@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from flask import Flask, request, abort
+import datetime
 import logging
 import json
 import os
@@ -9,6 +10,9 @@ import requests
 app = Flask(__name__)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
+
+def getDate():
+    return datetime.datetime.now().strftime("%c")
 
 def doNotify(success, build):
 
@@ -40,16 +44,19 @@ def doNotify(success, build):
 
     try:
         r = requests.post("https://api.telegram.org/bot{}/sendmessage".format(ttoken), json=postdata)
-        print(r.text)
+        if (r.status_code == 200):
+            print("[{}] - Sent Webhook for repo {}".format(getDate(), build["repo"]["slug"]))
+        else:
+            print(r.text)
     except:
-        print("Warning: Telegram notify error!")
+         print("Warning: Telegram notify error!")
 
 @app.route('/hook', methods=['POST'])
 def webhook():
     if request.method == 'POST':
         json = request.json
         if (json['event'] == 'build') and (json['action'] == 'updated'):
-            print("{} - Got a webook for {} build {}".format(request.remote_addr, json['repo']['slug'], json['repo']['build']['number']))
+            print("[{}] - {} - Got a webook for {} build {} ({})".format(getDate(), request.remote_addr, json['repo']['slug'], json['build']['number'], json['build']['status']))
             success = True
             for stage in json['build']['stages']:
                 if stage['status'] == 'pending':
@@ -82,4 +89,5 @@ if __name__ == '__main__':
     if (not ttoken and not tchat):
         print("Env Var not set")
         exit()
+    print("[{}] - Started Drone Notify. Notification Channel: {}".format(getDate(), tchat))
     app.run(host='0.0.0.0')
