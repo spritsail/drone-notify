@@ -14,7 +14,7 @@ def doNotify(success, build):
 
     status = ("SUCCESS" if success else "FAILURE")
 
-    minutes,seconds=divmod(int(build["build"]["updated"]) - int(build["build"]["started"]), 60)
+    minutes,seconds=divmod(int(build["build"]["finished"]) - int(build["build"]["started"]), 60)
     datestr = "{:02}m{:02}s".format(minutes, seconds)
 
     drone_link = "{}/{}/{}".format(build["system"]["link"], build["repo"]["slug"], build["build"]["number"])
@@ -50,29 +50,15 @@ def doNotify(success, build):
 @post('/hook')
 def webhook():
     json = request.json
-    if (json['event'] == 'build') and (json['action'] == 'updated'):
+    if (json['event'] == 'build'):
         print("[{}] - {} - Got a webook for {} build {} ({})".format(getDate(), request.remote_addr, json['repo']['slug'], json['build']['number'], json['build']['status']))
-        success = True
-        for stage in json['build']['stages']:
-            if stage['status'] == 'pending':
-                # Set succeess to false as theres still something pending
-                success = False
-                break
-            for step in stage['steps']:
-                status = step['status']
-                if status == 'failure':
-                    doNotify(False, json)
-                    return 'epicfail', 200
-                if status != 'success':
-                    success = False
-
-        if success:
-            # All the steps are called success. nice.
+        if (json["build"]["status"] == "success"):
             doNotify(True, json)
-            return 'winrar', 200
-        else:
-            # Not a success or a failure, so still going or cancelled. No notify.
-            return 'mmmkay', 200
+            return "success", 200
+        elif (json["build"]["status"] == "failure"):
+            doNotify(False, json)
+            return "failure", 200
+
     # Default to blackholing it. Om nom nom.
     return '', 200
 
