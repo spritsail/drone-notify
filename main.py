@@ -19,6 +19,11 @@ def doNotify(success, build):
 
     status = ("SUCCESS" if success else "FAILURE")
 
+    isPR = ""
+    if (build["build"]["event"] == "pull_request"):
+        # This isn't pretty, but it works.
+        isPR = "#{PR_Num} → ".format(PR_Num=build["build"]["ref"].split("/")[2])
+
     multi_stage = ""
 
     emojiDict = {
@@ -44,9 +49,8 @@ def doNotify(success, build):
         commit_firstline = build["build"]["message"]
         commit_rest = ""
 
-    # TODO: Add PR functionality
-    notifymsg="<b>{repo} [{branch}]</b> #{number}: <b>{status}</b> in {time}\n<a href='{drone_link}'>{drone_link}</a>\n{multi_stage}<a href='{git_link}'>#{commit:7.7}</a> ({committer}): <i>{commit_firstline}</i>\n{commit_rest}".format(
-                    repo=build["repo"]["slug"], branch=build["build"]["target"], number=build["build"]["number"], status=status, time=calcTime(build["build"]["started"], build["build"]["finished"]),
+    notifymsg="<b>{repo} [{PR}{branch}]</b> #{number}: <b>{status}</b> in {time}\n<a href='{drone_link}'>{drone_link}</a>\n{multi_stage}<a href='{git_link}'>#{commit:7.7}</a> ({committer}): <i>{commit_firstline}</i>\n{commit_rest}".format(
+                    repo=build["repo"]["slug"], PR=isPR, branch=build["build"]["target"], number=build["build"]["number"], status=status, time=calcTime(build["build"]["started"], build["build"]["finished"]),
                     drone_link=drone_link, multi_stage=multi_stage, git_link=build["build"]["link"], commit=build["build"]["after"], committer=build["build"]["author_login"], commit_firstline=commit_firstline, commit_rest=commit_rest)
 
     postdata = {
