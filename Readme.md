@@ -4,7 +4,6 @@ This script sets up a webhook listener for Drone's global webhooks. It then send
 
 ## Running
 
-Run the docker container with the following environment variables set:
- * `TELEGRAM_TOKEN` = Bot Token
- * `TELEGRAM_CHAT` = Chat ID
+Run the docker container with a config file (notify.conf) mounted to /config/notify.conf
 
+An example config file can be found in `notify.conf.example`

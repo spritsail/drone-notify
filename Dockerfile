@@ -18,4 +18,4 @@ RUN apk add --no-cache py3-pip \
 
 VOLUME ["/config"]
 
-CMD ["/usr/bin/python3", "-u", "/app/main.py"]
+CMD ["/usr/bin/python3", "-u", "/app/main.py", "/config/notify.conf"]
