@@ -2,10 +2,12 @@
 
 from bottle import run, post, request
 from sys import argv
+from html import escape
 import datetime
-import logging
 import json
 import configparser
+import logging
+import os
 import requests
 
 def getDate():
@@ -23,7 +25,7 @@ def doNotify(success, build):
     isPR = ""
     if (build["build"]["event"] == "pull_request"):
         # This isn't pretty, but it works.
-        isPR = "#{PR_Num} → ".format(PR_Num=build["build"]["ref"].split("/")[2])
+        isPR = "#{PR_Num} → ".format(PR_Num=escape(build["build"]["ref"].split("/")[2]))
 
     multi_stage = ""
 
@@ -37,8 +39,12 @@ def doNotify(success, build):
 
     if (len(build["build"]["stages"]) > 1):
         for stage in build["build"]["stages"]:
-            stageline = "• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n".format(stage_name=stage["name"], stage_state=stage["status"], time=calcTime(stage["started"], stage["stopped"]), emoji=emojiDict.get(stage["status"], "❔"))
-            multi_stage += stageline
+            multi_stage += "• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n".format(
+                    stage_name=escape(stage["name"]),
+                    stage_state=escape(stage["status"]),
+                    time=calcTime(stage["started"], stage["stopped"]),
+                    emoji=emojiDict.get(stage["status"], "❔")
+            )
         multi_stage += "\n"
 
     drone_link = "{}/{}/{}".format(build["system"]["link"], build["repo"]["slug"], build["build"]["number"])
@@ -50,9 +56,26 @@ def doNotify(success, build):
         commit_firstline = build["build"]["message"]
         commit_rest = ""
 
-    notifymsg="<b>{repo} [{PR}{branch}]</b> #{number}: <b>{status}</b> in {time}\n<a href='{drone_link}'>{drone_link}</a>\n{multi_stage}<a href='{git_link}'>#{commit:7.7}</a> ({committer}): <i>{commit_firstline}</i>\n{commit_rest}".format(
-                    repo=build["repo"]["slug"], PR=isPR, branch=build["build"]["target"], number=build["build"]["number"], status=status, time=calcTime(build["build"]["started"], build["build"]["finished"]),
-                    drone_link=drone_link, multi_stage=multi_stage, git_link=build["build"]["link"], commit=build["build"]["after"], committer=build["build"]["author_login"], commit_firstline=commit_firstline, commit_rest=commit_rest)
+    notifytmpl="<b>{repo} [{PR}{branch}]</b> #{number}: <b>{status}</b> in {time}\n" + \
+               "<a href='{drone_link}'>{drone_link}</a>\n" + \
+               "{multi_stage}<a href='{git_link}'>#{commit:7.7}</a> ({committer}): <i>{commit_firstline}</i>" + \
+               "\n{commit_rest}"
+
+    notifymsg = notifytmpl.format(
+        PR=isPR,
+        branch=escape(build["build"]["target"]),
+        commit=escape(build["build"]["after"]),
+        commit_firstline=escape(commit_firstline),
+        commit_rest=escape(commit_rest),
+        committer=escape(build["build"]["author_login"]),
+        drone_link=escape(drone_link),
+        git_link=escape(build["build"]["link"]),
+        multi_stage=multi_stage,
+        number=build["build"]["number"],
+        repo=escape(build["repo"]["slug"]),
+        status=escape(status),
+        time=calcTime(build["build"]["started"], build["build"]["finished"]),
+    )
 
     tchat = config["channels"].get(build["repo"]["slug"], default_channel)
 
@@ -63,20 +86,27 @@ def doNotify(success, build):
             "text": notifymsg
     }
 
+    print("[{}] - Sending Telegram notification for {} #{}".format(getDate(),
+        build["repo"]["slug"], build["build"]["number"]))
     try:
         r = requests.post("https://api.telegram.org/bot{}/sendmessage".format(ttoken), json=postdata)
-        if (r.status_code == 200):
-            print("[{}] - Sent Webhook for repo {} to chat {}".format(getDate(), build["repo"]["slug"], tchat))
-        else:
-            print(r.text)
+        r.raise_for_status()
+    except requests.exceptions.HTTPError as err:
+        print("[{}] - Error: {}".format(getDate(), err))
+        print("[{}] - Failed to send notification for {}".format(getDate(), json.dumps(build)))
     except:
-         print("Warning: Telegram notify error!")
+        print("[{}] - Error: Failed to send Telegram notification!".format(getDate()))
 
 @post('/hook')
 def webhook():
     json = request.json
     if (json['event'] == 'build'):
-        print("[{}] - {} - Got a webook for {} build {} ({})".format(getDate(), request.remote_addr, json['repo']['slug'], json['build']['number'], json['build']['status']))
+        print("[{}] - {} - Got a webook for {} #{} ({})".format(getDate(),
+            request.remote_addr, json['repo']['slug'],
+            json['build']['number'],
+            json['build']['status']
+        ))
+
         if (json["build"]["status"] == "success"):
             doNotify(True, json)
             return "success"
@@ -101,8 +131,11 @@ if __name__ == '__main__':
     ttoken = config["main"]["token"]
     default_channel = config["channels"]["default"]
 
-    if (not ttoken or not default_channel):
-        print("Token or Channel not set")
+    if (not ttoken):
+        print("[{}] - Error: Required variable `main.token' empty or unset".format(getDate()))
+        exit()
+    elif (not default_channel):
+        print("[{}] - Error: Required value `channels.default' empty or unset".format(getDate()))
         exit()
     print("[{}] - Started Drone Notify. Default Notification Channel: {}".format(getDate(), default_channel))
-    run(host='0.0.0.0', port=5000, quiet=True)
+    run(host='::', port=5000, quiet=True)
