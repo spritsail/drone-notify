@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-VERSION = 1.0
+VERSION = 1.1
 
 
 def calcTime(start, end):
