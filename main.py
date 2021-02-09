@@ -2,16 +2,18 @@
 
 from html import escape
 import configparser
-import datetime
 import json
 import sys
+import logging
 import requests
 
 from bottle import run, post, request
 
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
-def getDate():
-    return datetime.datetime.now().strftime("%c")
+
+VERSION = 1.0
 
 
 def calcTime(start, end):
@@ -94,10 +96,9 @@ def doNotify(success, build):
         "text": notifymsg,
     }
 
-    print(
-        "[{}] - Sending Telegram notification for {} #{}".format(
-            getDate(), build["repo"]["slug"], build["build"]["number"]
-        )
+    log.info(
+        "Sending Telegram notification for %s #%d"
+        % (build["repo"]["slug"], build["build"]["number"])
     )
     try:
         r = requests.post(
@@ -105,19 +106,19 @@ def doNotify(success, build):
         )
         r.raise_for_status()
     except requests.exceptions.HTTPError as err:
-        print("[{}] - Error: {}".format(getDate(), err))
-        print("[{}] - Failed to send notification for {}".format(getDate(), json.dumps(build)))
-    except:
-        print("[{}] - Error: Failed to send Telegram notification!".format(getDate()))
+        log.error("Failed to send notification for %s" % json.dumps(build))
+        log.error(err)
+    except Exception as err:
+        log.error("Error: Failed to send Telegram notification: %s" % err)
 
 
 @post("/hook")
 def webhook():
     json = request.json
     if json["event"] == "build":
-        print(
-            "[{}] - {} - Got a webook for {} #{} ({})".format(
-                getDate(),
+        log.debug(
+            "%s - Got a webook for %s #%d (%s)"
+            % (
                 request.remote_addr,
                 json["repo"]["slug"],
                 json["build"]["number"],
@@ -137,6 +138,14 @@ def webhook():
 
 
 if __name__ == "__main__":
+    # Configure stdout logging
+    logging.basicConfig(
+        level=logging.INFO,
+        datefmt="%Y-%m-%dT%H:%M:%SZ",
+        format="[%(asctime)s] %(levelname)s - %(message)s",
+        stream=sys.stdout,
+    )
+
     if len(sys.argv) > 1:
         cfg_path = sys.argv[1]
     else:
@@ -151,14 +160,13 @@ if __name__ == "__main__":
     default_channel = config["channels"]["default"]
 
     if not ttoken:
-        print("[{}] - Error: Required variable `main.token' empty or unset".format(getDate()))
+        log.error("Required variable `main.token' empty or unset")
         sys.exit(1)
     elif not default_channel:
-        print("[{}] - Error: Required value `channels.default' empty or unset".format(getDate()))
+        log.error("Required value `channels.default' empty or unset")
         sys.exit(1)
-    print(
-        "[{}] - Started Drone Notify. Default Notification Channel: {}".format(
-            getDate(), default_channel
-        )
+
+    log.info(
+        "Started Drone Notify v%s. Default Notification Channel: %s" % (VERSION, default_channel)
     )
     run(host="::", port=5000, quiet=True)
