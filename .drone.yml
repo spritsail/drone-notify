@@ -27,6 +27,24 @@ steps:
     - push
 
 ---
+kind: pipeline
+name: update-readme
+
+steps:
+- name: dockerhub-readme
+  pull: always
+  image: jlesage/drone-push-readme
+  settings:
+    username: {from_secret: docker_username}
+    password: {from_secret: docker_password}
+    repo: spritsail/drone-notify
+  when:
+    branch:
+    - master
+    event:
+    - push
+
+---
 kind: signature
 hmac: ab206db1c83e7ee0690a18c99fed476c0bf1ff23869026c5c09d8c877580c1a8
 
