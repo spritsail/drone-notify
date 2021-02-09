@@ -10,31 +10,24 @@ steps:
 - name: build
   pull: always
   image: spritsail/docker-build
-  settings:
-    repo: dronenotify-dev
 
 - name: publish
   pull: always
   image: spritsail/docker-publish
   settings:
-    from: dronenotify-dev
     repo: adamant/drone-notify
     tags:
     - latest
     - "%label org.label-schema.version"
-  environment:
-    DOCKER_PASSWORD:
-      from_secret: docker_password
-    DOCKER_USERNAME:
-      from_secret: docker_username
+    login: {from_secret: docker_login}
   when:
     branch:
     - master
     event:
     - push
-    - tag
+
 ---
 kind: signature
-hmac: f58e6ca912aeded5fcbe8b7a5c55c538e5ced0ac1866f7de5cf26bbc6cae6a13
+hmac: ab206db1c83e7ee0690a18c99fed476c0bf1ff23869026c5c09d8c877580c1a8
 
 ...
