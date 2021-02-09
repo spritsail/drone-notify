@@ -22,6 +22,8 @@ def calcTime(start, end):
 
 
 def doNotify(success, build):
+    if "[NOTIFY SKIP]" in build["build"]["message"] or "[SKIP NOTIFY]" in build["build"]["message"]:
+        return
 
     status = "SUCCESS" if success else "FAILURE"
 
