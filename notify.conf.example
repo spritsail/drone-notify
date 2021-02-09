@@ -1,4 +1,6 @@
 [main]
+host = ::
+port = 5000
 token = TOKEN
 
 [channels]

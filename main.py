@@ -6,6 +6,7 @@ import json
 import sys
 import logging
 import requests
+import ipaddress
 
 from bottle import run, post, request
 
@@ -169,4 +170,9 @@ if __name__ == "__main__":
     log.info(
         "Started Drone Notify v%s. Default Notification Channel: %s" % (VERSION, default_channel)
     )
-    run(host="::", port=5000, quiet=True)
+
+    host = ipaddress.ip_address(config["main"].get("host", "::"))
+    port = int(config["main"].get("port", 5000))
+    hostport = ("[%s]:%d" if host.version == 6 else "%s:%d") % (host, port)
+    log.info("Listening on %s" % hostport)
+    run(host=str(host), port=port, quiet=True)
