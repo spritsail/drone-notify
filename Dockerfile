@@ -2,10 +2,10 @@ FROM spritsail/alpine:3.13
 
 ARG NOTIFY_VER=1.1
 
-LABEL maintainer="Adam Dodman <dronenotify@adam-ant.co.uk>" \
-      org.label-schema.vendor="Adam Dodman" \
+LABEL maintainer="Adam Dodman <dronenotify@spritsail.io>" \
+      org.label-schema.vendor="Spritsail" \
       org.label-schema.name="Drone Notify" \
-      org.label-schema.url="https://github.com/Adam-Ant/DroneWebhookNotify" \
+      org.label-schema.url="https://github.com/spritsail/drone-notify" \
       org.label-schema.description="Turn Drone global webhooks into Telegram notifications" \
       org.label-schema.version=${NOTIFY_VER}
 

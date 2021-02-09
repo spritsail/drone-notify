@@ -15,7 +15,7 @@ steps:
   pull: always
   image: spritsail/docker-publish
   settings:
-    repo: adamant/drone-notify
+    repo: spritsail/drone-notify
     tags:
     - latest
     - "%label org.label-schema.version"
