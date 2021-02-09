@@ -1,4 +1,4 @@
-FROM spritsail/alpine:3.11
+FROM spritsail/alpine:3.13
 
 ARG NOTIFY_VER=1.0
 
