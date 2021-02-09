@@ -11,10 +11,12 @@ LABEL maintainer="Adam Dodman <dronenotify@adam-ant.co.uk>" \
 
 WORKDIR /app/
 
-COPY requirements.txt main.py /app/
+COPY requirements.txt /app/
 
 RUN apk add --no-cache py3-pip \
  && pip3 install -r requirements.txt
+
+COPY --chmod=755 main.py /app/
 
 VOLUME ["/config"]
 
