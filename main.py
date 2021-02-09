@@ -1,14 +1,13 @@
 #!/usr/bin/python3
 
-from bottle import run, post, request
-from sys import argv
 from html import escape
+import configparser
 import datetime
 import json
-import configparser
-import logging
-import os
+import sys
 import requests
+
+from bottle import run, post, request
 
 
 def getDate():
@@ -66,8 +65,8 @@ def doNotify(success, build):
     notifytmpl = (
         "<b>{repo} [{PR}{branch}]</b> #{number}: <b>{status}</b> in {time}\n"
         + "<a href='{drone_link}'>{drone_link}</a>\n"
-        + "{multi_stage}<a href='{git_link}'>#{commit:7.7}</a> ({committer}): <i>{commit_firstline}</i>"
-        + "\n{commit_rest}"
+        + "{multi_stage}<a href='{git_link}'>#{commit:7.7}</a> ({committer}): "
+        + "<i>{commit_firstline}</i>\n{commit_rest}"
     )
 
     notifymsg = notifytmpl.format(
@@ -138,8 +137,8 @@ def webhook():
 
 
 if __name__ == "__main__":
-    if len(argv) > 1:
-        cfg_path = argv[1]
+    if len(sys.argv) > 1:
+        cfg_path = sys.argv[1]
     else:
         cfg_path = "./notify.conf"
 
@@ -153,10 +152,10 @@ if __name__ == "__main__":
 
     if not ttoken:
         print("[{}] - Error: Required variable `main.token' empty or unset".format(getDate()))
-        exit()
+        sys.exit(1)
     elif not default_channel:
         print("[{}] - Error: Required value `channels.default' empty or unset".format(getDate()))
-        exit()
+        sys.exit(1)
     print(
         "[{}] - Started Drone Notify. Default Notification Channel: {}".format(
             getDate(), default_channel
