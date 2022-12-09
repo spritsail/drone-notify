@@ -1,5 +1,5 @@
 bottle==0.12.21
-certifi==2022.6.15
+certifi==2022.12.7
 chardet==4.0.0
 idna==3.3
 requests==2.28.0
