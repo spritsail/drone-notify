@@ -61,6 +61,7 @@ def doNotify(success, build):
     emojiDict = {
         "success": "✅",
         "failure": "❌",
+        "error": "💢",
         "running": "▶️",
         "skipped": "🚫",
         "pending": "🔄",
@@ -144,13 +145,13 @@ def webhook():
             doNotify(True, json)
             log.debug("Returning success to %s" % request.remote_addr)
             return "success"
-        elif json["build"]["status"] == "failure":
+        elif json["build"]["status"] is "failure" or "error":
             doNotify(False, json)
             log.debug("Returning failure to %s" % request.remote_addr)
             return "failure"
 
     # Default to blackholing it. Om nom nom.
-    log.debug("Unknown build state, accepting & taking no action")
+    log.debug("Not a build state, accepting & taking no action")
     return "accepted"
 
 
