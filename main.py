@@ -12,7 +12,7 @@ from bottle import run, post, request
 
 log = logging.getLogger(__name__)
 
-VERSION = 1.2
+VERSION = 1.3
 
 
 def calcTime(start, end):
@@ -44,12 +44,10 @@ def sendTelegramMsg(chatid, message):
         log.error("Error: Failed to send Telegram notification: %s" % err)
 
 
-def doNotify(success, build):
+def doNotify(build):
     if "[NOTIFY SKIP]" in build["build"]["message"] or "[SKIP NOTIFY]" in build["build"]["message"]:
         log.debug("Skipping build as flags set")
         return
-
-    status = "SUCCESS" if success else "FAILURE"
 
     isPR = ""
     if build["build"]["event"] == "pull_request":
@@ -62,20 +60,22 @@ def doNotify(success, build):
         "success": "✅",
         "failure": "❌",
         "error": "💢",
+        "killed": "☠️",
         "running": "▶️",
         "skipped": "🚫",
         "pending": "🔄",
     }
 
-    if len(build["build"]["stages"]) > 1:
-        for stage in build["build"]["stages"]:
-            multi_stage += "• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n".format(
-                stage_name=escape(stage["name"]),
-                stage_state=escape(stage["status"]),
-                time=calcTime(stage["started"], stage["stopped"]),
-                emoji=emojiDict.get(stage["status"], "❔"),
-            )
-        multi_stage += "\n"
+    if "stages" in build["build"]:
+        if len(build["build"]["stages"]) > 1:
+            for stage in build["build"]["stages"]:
+                multi_stage += "• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n".format(
+                    stage_name=escape(stage["name"]),
+                    stage_state=escape(stage["status"]),
+                    time=calcTime(stage["started"], stage["stopped"]),
+                    emoji=emojiDict.get(stage["status"], "❔"),
+                )
+            multi_stage += "\n"
 
     drone_link = "{}/{}/{}".format(
         build["system"]["link"], build["repo"]["slug"], build["build"]["number"]
@@ -107,7 +107,7 @@ def doNotify(success, build):
         multi_stage=multi_stage,
         number=build["build"]["number"],
         repo=escape(build["repo"]["slug"]),
-        status=escape(status),
+        status=escape(build["build"]["status"]).upper(),
         time=calcTime(build["build"]["started"], build["build"]["finished"]),
     )
 
@@ -122,7 +122,7 @@ def doNotify(success, build):
     sendTelegramMsg(tchat, notifymsg)
 
     # If theres a failure channel defined & the build has failed, notify that too
-    if (not success) and failure_channel:
+    if (build["build"]["status"] != "success") and failure_channel:
         sendTelegramMsg(failure_channel, notifymsg)
 
 
@@ -141,17 +141,15 @@ def webhook():
             )
         )
 
-        if json["build"]["status"] == "success":
-            doNotify(True, json)
-            log.debug("Returning success to %s" % request.remote_addr)
-            return "success"
-        elif json["build"]["status"] is "failure" or "error":
-            doNotify(False, json)
-            log.debug("Returning failure to %s" % request.remote_addr)
-            return "failure"
+        validBuildStates = ("success", "failure", "error", "killed")
+
+        if json["build"]["status"] in validBuildStates:
+            doNotify(json)
+            log.debug("Returning %s to %s" % (json["build"]["status"], request.remote_addr))
+            return escape(json["build"]["status"])
 
     # Default to blackholing it. Om nom nom.
-    log.debug("Not a build state, accepting & taking no action")
+    log.debug("Not a valid build state, accepting & taking no action")
     return "accepted"
 
 
