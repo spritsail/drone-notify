@@ -11,8 +11,6 @@ import ipaddress
 from bottle import run, post, request
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
-
 
 VERSION = 1.2
 
@@ -32,6 +30,8 @@ def sendTelegramMsg(chatid, message):
         "text": message,
     }
 
+    log.debug("Sending following data to the Telegram API: %s" % json.dumps(postdata))
+
     try:
         r = requests.post(
             "https://api.telegram.org/bot{}/sendmessage".format(ttoken), json=postdata
@@ -46,6 +46,7 @@ def sendTelegramMsg(chatid, message):
 
 def doNotify(success, build):
     if "[NOTIFY SKIP]" in build["build"]["message"] or "[SKIP NOTIFY]" in build["build"]["message"]:
+        log.debug("Skipping build as flags set")
         return
 
     status = "SUCCESS" if success else "FAILURE"
@@ -127,9 +128,10 @@ def doNotify(success, build):
 @post("/hook")
 def webhook():
     json = request.json
+    log.debug("Received a post from %s: %s" % (request.remote_addr, json))
     if json["event"] == "build":
         log.debug(
-            "%s - Got a webook for %s #%d (%s)"
+            "%s - Successfully parsed a webook for %s #%d (%s)"
             % (
                 request.remote_addr,
                 json["repo"]["slug"],
@@ -140,12 +142,15 @@ def webhook():
 
         if json["build"]["status"] == "success":
             doNotify(True, json)
+            log.debug("Returning success to %s" % request.remote_addr)
             return "success"
         elif json["build"]["status"] == "failure":
             doNotify(False, json)
+            log.debug("Returning failure to %s" % request.remote_addr)
             return "failure"
 
     # Default to blackholing it. Om nom nom.
+    log.debug("Unknown build state, accepting & taking no action")
     return "accepted"
 
 
@@ -171,6 +176,10 @@ if __name__ == "__main__":
     ttoken = config["main"]["token"]
     default_channel = config["channels"]["default"]
 
+    if config.has_option("main", "debug"):
+        if config["main"].getboolean("debug"):
+            log.setLevel(logging.DEBUG)
+
     # If a failure channel exists, assign it to a var
     failure_channel = False
 
@@ -187,6 +196,7 @@ if __name__ == "__main__":
     log.info(
         "Started Drone Notify v%s. Default Notification Channel: %s" % (VERSION, default_channel)
     )
+    log.debug("Debug logging is enabled - prepare for logspam")
 
     host = ipaddress.ip_address(config["main"].get("host", "::"))
     port = int(config["main"].get("port", 5000))
