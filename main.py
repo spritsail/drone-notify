@@ -1,28 +1,46 @@
 #!/usr/bin/python3
 
-from html import escape
+# pylint: disable=missing-function-docstring
 import configparser
-import json
-import sys
-import logging
-import requests
 import ipaddress
+import json
+import logging
+import sys
+from html import escape
+from typing import Any
 
-from bottle import run, post, request
+import requests
+from bottle import post, request, run
 
 log = logging.getLogger(__name__)
 
 VERSION = 1.3
 
+VALID_BUILD_STATES = (
+    "success",
+    "failure",
+    "error",
+    "killed",
+)
 
-def calcTime(start, end):
+BUILD_STATUS_EMOJI = {
+    "success": "✅",
+    "failure": "❌",
+    "error": "💢",
+    "killed": "☠️",
+    "running": "▶️",
+    "skipped": "🚫",
+    "pending": "⏳",
+}
+
+
+def format_duration(start: int | float, end: int | float) -> str:
     minutes, seconds = divmod((int(end) - int(start)), 60)
-    datestr = "{:02}m{:02}s".format(minutes, seconds)
+    datestr = f"{minutes:02}m{seconds:02}s"
     return datestr
 
 
-def sendTelegramMsg(chatid, message):
-
+def send_telegram_msg(chatid: str, message: str) -> None:
     postdata = {
         "parse_mode": "html",
         "disable_web_page_preview": "true",
@@ -30,41 +48,33 @@ def sendTelegramMsg(chatid, message):
         "text": message,
     }
 
-    log.debug("Sending following data to the Telegram API: %s" % json.dumps(postdata))
+    log.debug("Sending following data to the Telegram API: %s", json.dumps(postdata))
 
     try:
-        r = requests.post(
-            "https://api.telegram.org/bot{}/sendmessage".format(ttoken), json=postdata
+        resp = requests.post(
+            f"https://api.telegram.org/bot{ttoken}/sendmessage",
+            json=postdata,
+            timeout=60,
         )
-        r.raise_for_status()
+        resp.raise_for_status()
     except requests.exceptions.HTTPError as err:
-        log.error("Failed to send notification for %s" % json.dumps(postdata))
+        log.error("Failed to send notification for %s", json.dumps(postdata))
         log.error(err)
-    except Exception as err:
-        log.error("Error: Failed to send Telegram notification: %s" % err)
+    except Exception as err:  # pylint: disable=broad-except
+        log.error("Error: Failed to send Telegram notification: %s", err)
 
 
-def doNotify(build):
+def do_notify(build: dict[Any, Any]) -> None:
     if "[NOTIFY SKIP]" in build["build"]["message"] or "[SKIP NOTIFY]" in build["build"]["message"]:
         log.debug("Skipping build as flags set")
         return
 
-    isPR = ""
+    is_pr = ""
     if build["build"]["event"] == "pull_request":
         # This isn't pretty, but it works.
-        isPR = "#{PR_Num} → ".format(PR_Num=escape(build["build"]["ref"].split("/")[2]))
+        is_pr = f"#{escape(build['build']['ref'].split('/')[2])} → "
 
     multi_stage = ""
-
-    emojiDict = {
-        "success": "✅",
-        "failure": "❌",
-        "error": "💢",
-        "killed": "☠️",
-        "running": "▶️",
-        "skipped": "🚫",
-        "pending": "🔄",
-    }
 
     if "stages" in build["build"]:
         if len(build["build"]["stages"]) > 1:
@@ -72,8 +82,8 @@ def doNotify(build):
                 multi_stage += "• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n".format(
                     stage_name=escape(stage["name"]),
                     stage_state=escape(stage["status"]),
-                    time=calcTime(stage["started"], stage["stopped"]),
-                    emoji=emojiDict.get(stage["status"], "❔"),
+                    time=format_duration(stage["started"], stage["stopped"]),
+                    emoji=BUILD_STATUS_EMOJI.get(stage["status"], "❔"),
                 )
             multi_stage += "\n"
 
@@ -96,7 +106,7 @@ def doNotify(build):
     )
 
     notifymsg = notifytmpl.format(
-        PR=isPR,
+        PR=is_pr,
         branch=escape(build["build"]["target"]),
         commit=escape(build["build"]["after"]),
         commit_firstline=escape(commit_firstline),
@@ -108,45 +118,41 @@ def doNotify(build):
         number=build["build"]["number"],
         repo=escape(build["repo"]["slug"]),
         status=escape(build["build"]["status"]).upper(),
-        time=calcTime(build["build"]["started"], build["build"]["finished"]),
+        time=format_duration(build["build"]["started"], build["build"]["finished"]),
     )
 
     log.info(
-        "Sending Telegram notification(s) for %s #%d"
-        % (build["repo"]["slug"], build["build"]["number"])
+        "Sending Telegram notification(s) for %s #%d",
+        build["repo"]["slug"],
+        build["build"]["number"],
     )
 
     tchat = config["channels"].get(build["repo"]["slug"], default_channel)
 
     # Send normal telegram notification
-    sendTelegramMsg(tchat, notifymsg)
+    send_telegram_msg(tchat, notifymsg)
 
     # If theres a failure channel defined & the build has failed, notify that too
-    if (build["build"]["status"] != "success") and failure_channel:
-        sendTelegramMsg(failure_channel, notifymsg)
+    if build["build"]["status"] != "success" and failure_channel is not None:
+        send_telegram_msg(failure_channel, notifymsg)
 
 
 @post("/hook")
-def webhook():
-    json = request.json
-    log.debug("Received a post from %s: %s" % (request.remote_addr, json))
-    if json["event"] == "build":
+def webhook() -> Any:
+    log.debug("Received a post from %s: %s", request.remote_addr, request.json)
+    if request.json["event"] == "build":
         log.debug(
-            "%s - Successfully parsed a webook for %s #%d (%s)"
-            % (
-                request.remote_addr,
-                json["repo"]["slug"],
-                json["build"]["number"],
-                json["build"]["status"],
-            )
+            "%s - Successfully parsed a webook for %s #%d (%s)",
+            request.remote_addr,
+            request.json["repo"]["slug"],
+            request.json["build"]["number"],
+            request.json["build"]["status"],
         )
 
-        validBuildStates = ("success", "failure", "error", "killed")
-
-        if json["build"]["status"] in validBuildStates:
-            doNotify(json)
-            log.debug("Returning %s to %s" % (json["build"]["status"], request.remote_addr))
-            return escape(json["build"]["status"])
+        if request.json["build"]["status"] in VALID_BUILD_STATES:
+            do_notify(request.json)
+            log.debug("Returning %s to %s", request.json["build"]["status"], request.remote_addr)
+            return escape(request.json["build"]["status"])
 
     # Default to blackholing it. Om nom nom.
     log.debug("Not a valid build state, accepting & taking no action")
@@ -162,12 +168,9 @@ if __name__ == "__main__":
         stream=sys.stdout,
     )
 
-    if len(sys.argv) > 1:
-        cfg_path = sys.argv[1]
-    else:
-        cfg_path = "./notify.conf"
-
-    # TODO: Add some sanity checks to make sure the file exists, is readable and contains everything we need.
+    # TODO: Add some sanity checks to make sure the file exists, is readable
+    # and contains everything we need.
+    cfg_path: str = sys.argv[1] if len(sys.argv) > 1 else "notify.conf"
 
     config = configparser.ConfigParser()
     config.read(cfg_path)
@@ -180,7 +183,7 @@ if __name__ == "__main__":
             log.setLevel(logging.DEBUG)
 
     # If a failure channel exists, assign it to a var
-    failure_channel = False
+    failure_channel: str | None = None
 
     if config.has_option("channels", "failure"):
         failure_channel = config["channels"]["failure"]
@@ -192,13 +195,11 @@ if __name__ == "__main__":
         log.error("Required value `channels.default' empty or unset")
         sys.exit(1)
 
-    log.info(
-        "Started Drone Notify v%s. Default Notification Channel: %s" % (VERSION, default_channel)
-    )
+    log.info("Started Drone Notify v%s. Default Notification Channel: %s", VERSION, default_channel)
     log.debug("Debug logging is enabled - prepare for logspam")
 
     host = ipaddress.ip_address(config["main"].get("host", "::"))
-    port = int(config["main"].get("port", 5000))
+    port = int(config["main"].get("port", "5000"))
     hostport = ("[%s]:%d" if host.version == 6 else "%s:%d") % (host, port)
-    log.info("Listening on %s" % hostport)
+    log.info("Listening on %s", hostport)
     run(host=str(host), port=port, quiet=True)

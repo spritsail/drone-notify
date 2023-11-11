@@ -1,3 +1,13 @@
 [tool.black]
 fast = true
 line-length = 100
+
+[tool.pylint.'messages control']
+disable = [
+  "missing-module-docstring",
+  "missing-class-docstring",
+  "missing-function-docstring",
+]
+
+[tool.mypy]
+strict = true
