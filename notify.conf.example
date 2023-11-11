@@ -2,7 +2,8 @@
 host = ::
 port = 5000
 token = TOKEN
-debug = false
+# optional, defaults to false
+#debug = true
 
 [channels]
 default = REQUIRED_VALUE

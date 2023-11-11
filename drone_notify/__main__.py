@@ -2,6 +2,7 @@
 
 # pylint: disable=missing-function-docstring
 import configparser
+import importlib.metadata
 import ipaddress
 import json
 import logging
@@ -14,7 +15,7 @@ from bottle import post, request, run
 
 log = logging.getLogger(__name__)
 
-VERSION = 1.3
+VERSION = importlib.metadata.version(__package__ or __name__)
 
 VALID_BUILD_STATES = (
     "success",

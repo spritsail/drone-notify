@@ -9,15 +9,14 @@ LABEL maintainer="Adam Dodman <dronenotify@spritsail.io>" \
       org.label-schema.description="Turn Drone global webhooks into Telegram notifications" \
       org.label-schema.version=${NOTIFY_VER}
 
-WORKDIR /app/
+# Note 'rw' is required because setuptools is bad
+# https://github.com/pypa/pip/issues/3930
+# https://github.com/pypa/setuptools/issues/3237
+RUN --mount=type=bind,target=/src,rw \
+    apk add --no-cache py3-pip && \
+    pip install /src
 
-COPY requirements.txt /app/
-
-RUN apk add --no-cache py3-pip \
- && pip3 install -r requirements.txt
-
-COPY --chmod=755 main.py /app/
-
+WORKDIR /config
 VOLUME ["/config"]
 
-CMD ["/usr/bin/python3", "-u", "/app/main.py", "/config/notify.conf"]
+CMD ["/usr/bin/python3", "-m", "drone_notify", "/config/notify.conf"]
