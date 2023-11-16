@@ -1,17 +1,18 @@
 #!/usr/bin/python3
 
 # pylint: disable=missing-function-docstring
+import asyncio
 import configparser
 import importlib.metadata
 import ipaddress
-import json
 import logging
+import socket
 import sys
 from html import escape
 from typing import Any
 
-import requests
-from bottle import post, request, run
+import aiohttp
+from aiohttp import web
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ def format_duration(start: int | float, end: int | float) -> str:
     return datestr
 
 
-def send_telegram_msg(chatid: str, message: str) -> None:
+async def send_telegram_msg(chatid: str, message: str) -> None:
     postdata = {
         "parse_mode": "html",
         "disable_web_page_preview": "true",
@@ -49,23 +50,22 @@ def send_telegram_msg(chatid: str, message: str) -> None:
         "text": message,
     }
 
-    log.debug("Sending following data to the Telegram API: %s", json.dumps(postdata))
+    async with aiohttp.ClientSession() as session:
+        respbody: str | None = None
+        try:
+            async with session.post(
+                f"https://api.telegram.org/bot{ttoken}/sendmessage",
+                json=postdata,
+                timeout=60,
+            ) as resp:
+                if not resp.ok:
+                    respbody = await resp.text()
+                resp.raise_for_status()
+        except aiohttp.ClientResponseError:
+            log.exception("Failed to send notification for %s: %s", postdata, respbody)
 
-    try:
-        resp = requests.post(
-            f"https://api.telegram.org/bot{ttoken}/sendmessage",
-            json=postdata,
-            timeout=60,
-        )
-        resp.raise_for_status()
-    except requests.exceptions.HTTPError as err:
-        log.error("Failed to send notification for %s", json.dumps(postdata))
-        log.error(err)
-    except Exception as err:  # pylint: disable=broad-except
-        log.error("Error: Failed to send Telegram notification: %s", err)
 
-
-def do_notify(build: dict[Any, Any]) -> None:
+async def do_notify(build: dict[Any, Any]) -> None:
     if "[NOTIFY SKIP]" in build["build"]["message"] or "[SKIP NOTIFY]" in build["build"]["message"]:
         log.debug("Skipping build as flags set")
         return
@@ -130,34 +130,61 @@ def do_notify(build: dict[Any, Any]) -> None:
 
     tchat = config["channels"].get(build["repo"]["slug"], default_channel)
 
+    senders = []
     # Send normal telegram notification
-    send_telegram_msg(tchat, notifymsg)
+    senders.append(send_telegram_msg(tchat, notifymsg))
 
     # If theres a failure channel defined & the build has failed, notify that too
     if build["build"]["status"] != "success" and failure_channel is not None:
-        send_telegram_msg(failure_channel, notifymsg)
+        senders.append(send_telegram_msg(failure_channel, notifymsg))
+
+    await asyncio.gather(*senders)
 
 
-@post("/hook")
-def webhook() -> Any:
-    log.debug("Received a post from %s: %s", request.remote_addr, request.json)
-    if request.json["event"] == "build":
+async def hook(request: web.Request) -> web.Response:
+    data = await request.json()
+    log.debug("Received a post from %s: %s", request.remote, data)
+    if data["event"] == "build":
         log.debug(
             "%s - Successfully parsed a webook for %s #%d (%s)",
-            request.remote_addr,
-            request.json["repo"]["slug"],
-            request.json["build"]["number"],
-            request.json["build"]["status"],
+            request.remote,
+            data["repo"]["slug"],
+            data["build"]["number"],
+            data["build"]["status"],
         )
 
-        if request.json["build"]["status"] in VALID_BUILD_STATES:
-            do_notify(request.json)
-            log.debug("Returning %s to %s", request.json["build"]["status"], request.remote_addr)
-            return escape(request.json["build"]["status"])
+        if data["build"]["status"] in VALID_BUILD_STATES:
+            await do_notify(data)
+            log.debug("Returning %s to %s", data["build"]["status"], request.remote)
+            return web.Response(body=data["build"]["status"])
 
     # Default to blackholing it. Om nom nom.
     log.debug("Not a valid build state, accepting & taking no action")
-    return "accepted"
+    return web.Response(body=b"accepted")
+
+
+async def main() -> None:
+    log.info("Started Drone Notify v%s. Default Notification Channel: %s", VERSION, default_channel)
+    log.debug("Debug logging is enabled - prepare for logspam")
+
+    host = ipaddress.ip_address(config["main"].get("host", "::"))
+    port = int(config["main"].get("port", "5000"))
+    hostport = ("[%s]:%d" if host.version == 6 else "%s:%d") % (host, port)
+    log.info("Listening on %s", hostport)
+
+    handler = web.Application()
+    handler.add_routes([web.post("/hook", hook)])
+
+    runner = web.AppRunner(handler)
+    await runner.setup()
+
+    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    sock.bind((str(host), port))
+    site = web.SockSite(runner, sock)
+    await site.start()
+    # I'm astounded that there doesn't seem to be a better way to wait than this?
+    while True:
+        await asyncio.sleep(1**63)
 
 
 if __name__ == "__main__":
@@ -196,11 +223,4 @@ if __name__ == "__main__":
         log.error("Required value `channels.default' empty or unset")
         sys.exit(1)
 
-    log.info("Started Drone Notify v%s. Default Notification Channel: %s", VERSION, default_channel)
-    log.debug("Debug logging is enabled - prepare for logspam")
-
-    host = ipaddress.ip_address(config["main"].get("host", "::"))
-    port = int(config["main"].get("port", "5000"))
-    hostport = ("[%s]:%d" if host.version == 6 else "%s:%d") % (host, port)
-    log.info("Listening on %s", hostport)
-    run(host=str(host), port=port, quiet=True)
+    asyncio.get_event_loop().run_until_complete(main())
