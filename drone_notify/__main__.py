@@ -73,7 +73,7 @@ async def do_notify(build: dict[Any, Any]) -> None:
     is_pr = ""
     if build["build"]["event"] == "pull_request":
         # This isn't pretty, but it works.
-        is_pr = f"#{escape(build['build']['ref'].split('/')[2])} → "
+        is_pr = f"#{escape(build['build']['ref'].split('/', 3)[2])} → "
 
     multi_stage = ""
 
