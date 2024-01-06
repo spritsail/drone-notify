@@ -1,3 +1,4 @@
 drone_notify.egg-info
 *.json
 notify.conf
+.history

@@ -6,8 +6,10 @@ import configparser
 import importlib.metadata
 import ipaddress
 import logging
+import os
 import socket
 import sys
+from . import http_signature
 from html import escape
 from typing import Any
 
@@ -17,6 +19,8 @@ from aiohttp import web
 log = logging.getLogger(__name__)
 
 VERSION = importlib.metadata.version(__package__ or __name__)
+
+DRONE_SECRET = os.environ.get('DRONE_SECRET')
 
 VALID_BUILD_STATES = (
     "success",
@@ -142,6 +146,9 @@ async def do_notify(build: dict[Any, Any]) -> None:
 
 
 async def hook(request: web.Request) -> web.Response:
+    if not http_signature.is_request_valid(request, DRONE_SECRET):
+        return web.HTTPUnauthorized()
+
     data = await request.json()
     log.debug("Received a post from %s: %s", request.remote, data)
     if data["event"] == "build":

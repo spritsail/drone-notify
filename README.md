@@ -27,6 +27,44 @@ Then run the container:
 docker run -d \
     --name=drone-notify \
     --restart=always \
+    -e DRONE_SECRET=testing \
     -v path/to/notify.conf:/config/notify.conf \
     spritsail/drone-notify
+```
+
+## YAML Configuration
+```yaml
+drone:
+    image: drone/drone:2
+    ...
+    environment:
+        ...
+        - DRONE_WEBHOOK_ENDPOINT=http://127.0.01:5000/
+        - DRONE_WEBHOOK_SECRET=YOUR_SECRET
+webook:
+    image: spritsail/drone-notify:1.3
+    ports:
+        - 5000:5000
+    volumes:
+        - /opt/drone/notify.conf:/config/notify.conf
+    environment:
+        - DRONE_SECRET=YOUR_SECRET
+```
+
+## Test locally
+These steps help to simulate the request coming from drone on a specific event
+
+1. First build a local dev image
+```sh
+docker build -t drone-notify .
+```
+
+2. Then start this image with with the script `start_test_server` from `root`:
+```sh
+./scripts/start_test_server.sh
+```
+
+3. Trigger a request to the server with the `mock_drone_request` script
+```sh
+./scripts/mock_drone_request.py
 ```
