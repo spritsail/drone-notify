@@ -1,4 +1,4 @@
-FROM spritsail/alpine:3.18
+FROM spritsail/alpine:3.19
 
 ARG NOTIFY_VER=1.3
 
@@ -14,7 +14,7 @@ LABEL maintainer="Adam Dodman <dronenotify@spritsail.io>" \
 # https://github.com/pypa/setuptools/issues/3237
 RUN --mount=type=bind,target=/src,rw \
     apk add --no-cache py3-pip && \
-    pip install /src
+    pip install --break-system-packages /src
 
 WORKDIR /config
 VOLUME ["/config"]
