@@ -13,11 +13,17 @@ build-backend = "setuptools.build_meta"
 fast = true
 line-length = 100
 
+[tool.isort]
+profile = "black"
+
 [tool.pylint.'messages control']
+enable = "all"
 disable = [
-  "missing-module-docstring",
+  "broad-except",
+  "invalid-name",
   "missing-class-docstring",
   "missing-function-docstring",
+  "missing-module-docstring",
 ]
 
 [tool.mypy]

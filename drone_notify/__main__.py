@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-# pylint: disable=missing-function-docstring
 import asyncio
 import configparser
 import importlib.metadata
