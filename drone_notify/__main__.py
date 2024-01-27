@@ -19,6 +19,9 @@ from typing import Any
 import aiohttp
 from aiohttp import web
 
+from drone_notify.digest import DigestVerifier
+from drone_notify.types import Middleware
+
 log = logging.getLogger(__name__)
 
 VERSION = importlib.metadata.version(__package__ or __name__)
@@ -188,9 +191,13 @@ async def main() -> None:
     host = ipaddress.ip_address(config["main"].get("host", "::"))
     port = int(config["main"].get("port", "5000"))
     hostport = ("[%s]:%d" if host.version == 6 else "%s:%d") % (host, port)
-    log.info("Listening on %s", hostport)
 
-    handler = web.Application()
+    middlewares: list[Middleware] = []
+
+    # Drone adds the `Digest:` header to all of it's requests
+    middlewares.append(DigestVerifier(require=True).verify_digest_headers)
+
+    handler = web.Application(middlewares=middlewares)
     handler.add_routes([web.post("/hook", hook)])
 
     runner = web.AppRunner(handler)
@@ -200,6 +207,8 @@ async def main() -> None:
     sock.bind((str(host), port))
     site = web.SockSite(runner, sock)
     await site.start()
+    log.info("Listening on %s", hostport)
+
     # I'm astounded that there doesn't seem to be a better way to wait than this?
     while True:
         await asyncio.sleep(1**63)
