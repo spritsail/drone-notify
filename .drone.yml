@@ -7,45 +7,56 @@ platform:
   arch: amd64
 
 steps:
-- name: build
-  pull: always
-  image: spritsail/docker-build
+  - name: lint
+    image: python:alpine
+    pull: always
+    commands:
+      - apk add --no-cache gcc libc-dev
+      - pip install --break-system-packages -e '.[lint]'
+      - black --check .
+      - isort --check .
+      - pyupgrade --py312-plus $(find drone_notify -name '*.py')
+      - pylint drone_notify
+      - mypy drone_notify
 
-- name: publish
-  pull: always
-  image: spritsail/docker-publish
-  settings:
-    repo: spritsail/drone-notify
-    tags:
-    - latest
-    - "%label org.label-schema.version"
-    login: {from_secret: docker_login}
-  when:
-    branch:
-    - master
-    event:
-    - push
+  - name: build
+    image: spritsail/docker-build
+    pull: always
 
----
-kind: pipeline
-name: update-readme
+  - name: publish
+    image: spritsail/docker-publish
+    pull: always
+    settings:
+      repo: spritsail/drone-notify
+      tags:
+        - latest
+        - "%label org.label-schema.version"
+      login: {from_secret: docker_login}
+    depends_on:
+      - build
+      - lint
+    when:
+      branch:
+        - master
+      event:
+        - push
 
-steps:
-- name: dockerhub-readme
-  pull: always
-  image: jlesage/drone-push-readme
-  settings:
-    username: {from_secret: docker_username}
-    password: {from_secret: docker_password}
-    repo: spritsail/drone-notify
-  when:
-    branch:
-    - master
-    event:
-    - push
-
+  - name: update-dockerhub-readme
+    image: jlesage/drone-push-readme
+    pull: always
+    settings:
+      username: {from_secret: docker_username}
+      password: {from_secret: docker_password}
+      repo: spritsail/drone-notify
+    depends_on:
+      - publish
+    when:
+      branch:
+        - master
+      event:
+        - push
 ---
 kind: signature
-hmac: ab206db1c83e7ee0690a18c99fed476c0bf1ff23869026c5c09d8c877580c1a8
+hmac: 6b765f0df8b52ede5e7e373deabcc724fc9e4fb21d899b636e39e0999363c07d
 
 ...

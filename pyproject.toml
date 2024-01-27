@@ -5,6 +5,15 @@ dependencies = [
   "aiohttp>=3.8"
 ]
 
+[project.optional-dependencies]
+lint = [
+  "black",
+  "isort",
+  "mypy",
+  "pylint",
+  "pyupgrade",
+]
+
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
@@ -19,11 +28,9 @@ profile = "black"
 [tool.pylint.'messages control']
 enable = "all"
 disable = [
-  "broad-except",
-  "invalid-name",
-  "missing-class-docstring",
-  "missing-function-docstring",
-  "missing-module-docstring",
+  "fixme",
+  # Several vars in __main__.py need refactoring
+  "used-before-assignment",
 ]
 
 [tool.mypy]

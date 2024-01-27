@@ -1,5 +1,11 @@
 #!/usr/bin/python3
 
+"""
+drone-notify - A webhook and notification sidecar daemon for Harness Drone
+Receives build webhook events from Drone and fires off notifications when
+builds complete, with support for multi-stage builds and pull-requests
+"""
+
 import asyncio
 import configparser
 import importlib.metadata
@@ -36,14 +42,20 @@ BUILD_STATUS_EMOJI = {
 
 
 def format_duration(start: int | float, end: int | float) -> str:
+    """
+    Produce a formatted duration in the form 12m34s given a start and end time
+    """
     minutes, seconds = divmod((int(end) - int(start)), 60)
     datestr = f"{minutes:02}m{seconds:02}s"
     return datestr
 
 
-async def send_telegram_msg(chatid: str, message: str) -> None:
+async def send_telegram_msg(chatid: str, message: str, parse_mode: str = "html") -> None:
+    """
+    Send a formatted message to a Telegram chat
+    """
     postdata = {
-        "parse_mode": "html",
+        "parse_mode": parse_mode,
         "disable_web_page_preview": "true",
         "chat_id": chatid,
         "text": message,
@@ -65,6 +77,9 @@ async def send_telegram_msg(chatid: str, message: str) -> None:
 
 
 async def do_notify(build: dict[Any, Any]) -> None:
+    """
+    Generate a formatted notification message and send it
+    """
     if "[NOTIFY SKIP]" in build["build"]["message"] or "[SKIP NOTIFY]" in build["build"]["message"]:
         log.debug("Skipping build as flags set")
         return
@@ -79,17 +94,15 @@ async def do_notify(build: dict[Any, Any]) -> None:
     if "stages" in build["build"]:
         if len(build["build"]["stages"]) > 1:
             for stage in build["build"]["stages"]:
-                multi_stage += "• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n".format(
-                    stage_name=escape(stage["name"]),
-                    stage_state=escape(stage["status"]),
-                    time=format_duration(stage["started"], stage["stopped"]),
-                    emoji=BUILD_STATUS_EMOJI.get(stage["status"], "❔"),
-                )
+                stage_name = escape(stage["name"])
+                stage_state = escape(stage["status"])
+                time = format_duration(stage["started"], stage["stopped"])
+                emoji = BUILD_STATUS_EMOJI.get(stage["status"], "❔")
+                multi_stage += f"• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n"
+
             multi_stage += "\n"
 
-    drone_link = "{}/{}/{}".format(
-        build["system"]["link"], build["repo"]["slug"], build["build"]["number"]
-    )
+    drone_link = f'{build["system"]["link"]}/{build["repo"]["slug"]}/{build["build"]["number"]}'
 
     try:
         commit_firstline, commit_rest = build["build"]["message"].split("\n", 1)
@@ -141,6 +154,9 @@ async def do_notify(build: dict[Any, Any]) -> None:
 
 
 async def hook(request: web.Request) -> web.Response:
+    """
+    Handle incoming webhooks from (hopefully) Drone
+    """
     data = await request.json()
     log.debug("Received a post from %s: %s", request.remote, data)
     if data["event"] == "build":
@@ -163,6 +179,9 @@ async def hook(request: web.Request) -> web.Response:
 
 
 async def main() -> None:
+    """
+    drone-notify entrypoint
+    """
     log.info("Started Drone Notify v%s. Default Notification Channel: %s", VERSION, default_channel)
     log.debug("Debug logging is enabled - prepare for logspam")
 
