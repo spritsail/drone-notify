@@ -13,6 +13,10 @@ lint = [
   "pylint",
   "pyupgrade",
 ]
+test = [
+  "pytest",
+  "pytest-aiohttp",
+]
 
 [build-system]
 requires = ["setuptools"]
@@ -31,7 +35,22 @@ disable = [
   "fixme",
   # Several vars in __main__.py need refactoring
   "used-before-assignment",
+  "too-few-public-methods",
 ]
 
 [tool.mypy]
 strict = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+  "-q",
+  "-ra",
+  "-vv",
+]
+pythonpath = [
+  "."
+]
+testpaths = [
+  "tests",
+]

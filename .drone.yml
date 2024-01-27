@@ -19,6 +19,14 @@ steps:
       - pylint drone_notify
       - mypy drone_notify
 
+  - name: test
+    image: python:alpine
+    pull: always
+    commands:
+      - apk add --no-cache gcc libc-dev
+      - pip install --break-system-packages -e '.[test]'
+      - pytest
+
   - name: build
     image: spritsail/docker-build
     pull: always
@@ -35,6 +43,7 @@ steps:
     depends_on:
       - build
       - lint
+      - test
     when:
       branch:
         - master
@@ -57,6 +66,6 @@ steps:
         - push
 ---
 kind: signature
-hmac: 6b765f0df8b52ede5e7e373deabcc724fc9e4fb21d899b636e39e0999363c07d
+hmac: 01ed4509e0bfd930ad462a83148a9530371cee10136f61b76887d008c6680e58
 
 ...
