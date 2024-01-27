@@ -30,3 +30,20 @@ docker run -d \
     -v path/to/notify.conf:/config/notify.conf \
     spritsail/drone-notify
 ```
+
+## Docker Compose Configuration
+```yaml
+services:
+  drone:
+    image: drone/drone:2
+    ...
+    environment:
+      ...
+      - DRONE_WEBHOOK_ENDPOINT=http://notify:5000
+      - DRONE_WEBHOOK_SECRET=YOUR_SECRET
+
+  notify:
+    image: spritsail/drone-notify:1.3
+    volumes:
+      - path/to/notify.conf:/config/notify.conf
+```

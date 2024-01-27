@@ -1,6 +1,6 @@
 FROM spritsail/alpine:3.19
 
-ARG NOTIFY_VER=1.3
+ARG NOTIFY_VER=1.4
 
 LABEL maintainer="Adam Dodman <dronenotify@spritsail.io>" \
       org.label-schema.vendor="Spritsail" \

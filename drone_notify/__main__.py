@@ -20,6 +20,7 @@ import aiohttp
 from aiohttp import web
 
 from drone_notify.digest import DigestVerifier
+from drone_notify.http_signature import verify_drone_signature
 from drone_notify.types import Middleware
 
 log = logging.getLogger(__name__)
@@ -156,7 +157,7 @@ async def do_notify(build: dict[Any, Any]) -> None:
     await asyncio.gather(*senders)
 
 
-async def hook(request: web.Request) -> web.Response:
+async def hook(request: web.Request) -> web.StreamResponse:
     """
     Handle incoming webhooks from (hopefully) Drone
     """
@@ -193,6 +194,10 @@ async def main() -> None:
     hostport = ("[%s]:%d" if host.version == 6 else "%s:%d") % (host, port)
 
     middlewares: list[Middleware] = []
+
+    if "secret" in config["main"]:
+        log.debug("Enabled webhook signature verification")
+        middlewares.append(verify_drone_signature(config["main"]["secret"].encode()))
 
     # Drone adds the `Digest:` header to all of it's requests
     middlewares.append(DigestVerifier(require=True).verify_digest_headers)
