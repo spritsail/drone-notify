@@ -231,6 +231,7 @@ def verify_signature(signer: Signer) -> Middleware:
     @aiohttp.web.middleware
     async def func(request: Request, handler: Handler) -> StreamResponse:
         if not signer.verify(request.headers):
+            log.warning("Failed to verify request signature from %s", request.remote)
             return HTTPUnauthorized(reason="Invalid signature")
 
         return await handler(request)
