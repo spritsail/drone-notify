@@ -14,12 +14,12 @@ import logging
 import socket
 import sys
 from html import escape
-from typing import Any
 
 import aiohttp
 from aiohttp import web
 
 from drone_notify.digest import DigestVerifier
+from drone_notify.drone import WebhookEvent, WebhookRequest
 from drone_notify.http_signature import verify_drone_signature
 from drone_notify.types import Middleware
 
@@ -80,39 +80,42 @@ async def send_telegram_msg(chatid: str, message: str, parse_mode: str = "html")
             log.exception("Failed to send notification for %s: %s", postdata, respbody)
 
 
-async def do_notify(build: dict[Any, Any]) -> None:
+async def do_notify(event: WebhookRequest) -> None:
     """
     Generate a formatted notification message and send it
     """
-    if "[NOTIFY SKIP]" in build["build"]["message"] or "[SKIP NOTIFY]" in build["build"]["message"]:
+    if event.build is None or event.repo is None or event.system is None:
+        # Satisfy type checkers. We already checked these
+        return
+
+    if "[NOTIFY SKIP]" in event.build.message or "[SKIP NOTIFY]" in event.build.message:
         log.debug("Skipping build as flags set")
         return
 
     is_pr = ""
-    if build["build"]["event"] == "pull_request":
+    if event.build.event == "pull_request":
         # This isn't pretty, but it works.
-        is_pr = f"#{escape(build['build']['ref'].split('/', 3)[2])} → "
+        is_pr = f"#{escape(event.build.ref.split('/', 3)[2])} → "
 
     multi_stage = ""
 
-    if "stages" in build["build"]:
-        if len(build["build"]["stages"]) > 1:
-            for stage in build["build"]["stages"]:
-                stage_name = escape(stage["name"])
-                stage_state = escape(stage["status"])
-                time = format_duration(stage["started"], stage["stopped"])
-                emoji = BUILD_STATUS_EMOJI.get(stage["status"], "❔")
-                multi_stage += f"• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n"
+    if event.build.stages is not None and len(event.build.stages) > 1:
+        for stage in event.build.stages:
+            stage_name = escape(stage.name)
+            stage_state = escape(stage.status)
+            time = format_duration(stage.started, stage.stopped)
+            emoji = BUILD_STATUS_EMOJI.get(stage.status, "❔")
+            multi_stage += f"• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n"
 
-            multi_stage += "\n"
+        multi_stage += "\n"
 
-    drone_link = f'{build["system"]["link"]}/{build["repo"]["slug"]}/{build["build"]["number"]}'
+    drone_link = f"{event.system.link}/{event.repo.slug}/{event.build.number}"
 
     try:
-        commit_firstline, commit_rest = build["build"]["message"].split("\n", 1)
+        commit_firstline, commit_rest = event.build.message.split("\n", 1)
         commit_rest = "-----\n" + commit_rest.strip()
     except ValueError:
-        commit_firstline = build["build"]["message"]
+        commit_firstline = event.build.message
         commit_rest = ""
 
     notifytmpl = (
@@ -124,34 +127,34 @@ async def do_notify(build: dict[Any, Any]) -> None:
 
     notifymsg = notifytmpl.format(
         PR=is_pr,
-        branch=escape(build["build"]["target"]),
-        commit=escape(build["build"]["after"]),
+        branch=escape(event.build.target),
+        commit=escape(event.build.after),
         commit_firstline=escape(commit_firstline),
         commit_rest=escape(commit_rest),
-        committer=escape(build["build"]["author_login"]),
+        committer=escape(event.build.author_login),
         drone_link=escape(drone_link),
-        git_link=escape(build["build"]["link"]),
+        git_link=escape(event.build.link),
         multi_stage=multi_stage,
-        number=build["build"]["number"],
-        repo=escape(build["repo"]["slug"]),
-        status=escape(build["build"]["status"]).upper(),
-        time=format_duration(build["build"]["started"], build["build"]["finished"]),
+        number=event.build.number,
+        repo=escape(event.repo.slug),
+        status=escape(event.build.status).upper(),
+        time=format_duration(event.build.started, event.build.finished),
     )
 
     log.info(
         "Sending Telegram notification(s) for %s #%d",
-        build["repo"]["slug"],
-        build["build"]["number"],
+        event.repo.slug,
+        event.build.number,
     )
 
-    tchat = config["channels"].get(build["repo"]["slug"], default_channel)
+    tchat = config["channels"].get(event.repo.slug, default_channel)
 
     senders = []
     # Send normal telegram notification
     senders.append(send_telegram_msg(tchat, notifymsg))
 
     # If theres a failure channel defined & the build has failed, notify that too
-    if build["build"]["status"] != "success" and failure_channel is not None:
+    if event.build.status != "success" and failure_channel is not None:
         senders.append(send_telegram_msg(failure_channel, notifymsg))
 
     await asyncio.gather(*senders)
@@ -162,20 +165,21 @@ async def hook(request: web.Request) -> web.StreamResponse:
     Handle incoming webhooks from (hopefully) Drone
     """
     data = await request.json()
-    log.debug("Received a post from %s: %s", request.remote, data)
-    if data["event"] == "build":
+    log.debug("Received a webhook request from %s: %s", request.remote, data)
+    event = WebhookRequest.from_dict(data)
+    if event.event is WebhookEvent.BUILD:
         log.debug(
             "%s - Successfully parsed a webook for %s #%d (%s)",
             request.remote,
-            data["repo"]["slug"],
-            data["build"]["number"],
-            data["build"]["status"],
+            event.repo.slug,
+            event.build.number,
+            event.build.status,
         )
 
-        if data["build"]["status"] in VALID_BUILD_STATES:
-            await do_notify(data)
-            log.debug("Returning %s to %s", data["build"]["status"], request.remote)
-            return web.Response(body=data["build"]["status"])
+        if event.build.status in VALID_BUILD_STATES:
+            await do_notify(event)
+            log.debug("Returning %s to %s", event.build.status, request.remote)
+            return web.Response(body=event.build.status)
 
     # Default to blackholing it. Om nom nom.
     log.debug("Not a valid build state, accepting & taking no action")

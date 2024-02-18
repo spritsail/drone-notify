@@ -3,6 +3,7 @@ name = "drone-notify"
 version = "1.4"
 dependencies = [
   "aiohttp>=3.8",
+  "dacite",
   "http-message-signatures>=0.4.1",
 ]
 
@@ -37,6 +38,7 @@ disable = [
   "fixme",
   "suppressed-message",
   "too-few-public-methods",
+  "too-many-instance-attributes",
   # Several vars in __main__.py need refactoring
   "used-before-assignment",
 ]
