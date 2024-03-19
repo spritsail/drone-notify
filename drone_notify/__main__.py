@@ -11,6 +11,7 @@ import configparser
 import importlib.metadata
 import ipaddress
 import logging
+import signal
 import socket
 import sys
 from html import escape
@@ -186,7 +187,7 @@ async def hook(request: web.Request) -> web.StreamResponse:
     return web.Response(body=b"accepted")
 
 
-async def main() -> None:
+async def startup() -> None:
     """
     drone-notify entrypoint
     """
@@ -217,10 +218,6 @@ async def main() -> None:
     site = web.SockSite(runner, sock)
     await site.start()
     log.info("Listening on %s", hostport)
-
-    # I'm astounded that there doesn't seem to be a better way to wait than this?
-    while True:
-        await asyncio.sleep(1**63)
 
 
 if __name__ == "__main__":
@@ -259,4 +256,16 @@ if __name__ == "__main__":
         log.error("Required value `channels.default' empty or unset")
         sys.exit(1)
 
-    asyncio.get_event_loop().run_until_complete(main())
+    try:
+        loop = asyncio.get_event_loop()
+        loop.add_signal_handler(signal.SIGTERM, loop.stop)
+        loop.add_signal_handler(signal.SIGINT, loop.stop)
+        loop.run_until_complete(startup())
+        loop.run_forever()
+    except KeyboardInterrupt:
+        log.info("Caught ^C, stopping")
+        loop.stop()
+    except Exception as e:  # pylint: disable=broad-except
+        log.info("Caught exception, stopping: %s", e)
+        loop.stop()
+        sys.exit(1)
