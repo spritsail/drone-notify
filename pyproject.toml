@@ -16,8 +16,7 @@ lint = [
   "pyupgrade",
 ]
 test = [
-  # https://github.com/pytest-dev/pytest-asyncio/issues/737
-  "pytest<8",
+  "pytest",
   "pytest-aiohttp",
 ]
 
