@@ -1,17 +1,14 @@
 [hub]: https://hub.docker.com/r/spritsail/drone-notify
 [git]: https://github.com/spritsail/drone-notify
 [drone]: https://drone.spritsail.io/spritsail/drone-notify
-[mbdg]: https://microbadger.com/images/spritsail/drone-notify
 
 # [spritsail/drone-notify][hub]
 
-[![Layers](https://images.microbadger.com/badges/image/spritsail/drone-notify.svg)][mbdg]
-[![Latest Version](https://images.microbadger.com/badges/version/spritsail/drone-notify.svg)][hub]
-[![Git Commit](https://images.microbadger.com/badges/commit/spritsail/drone-notify.svg)][git]
+[![Latest Version](https://img.shields.io/docker/v/spritsail/drone-notify)][git]
+[![Image Size](https://img.shields.io/docker/image-size/spritsail/drone-notify)][hub]
 [![Docker Pulls](https://img.shields.io/docker/pulls/spritsail/drone-notify.svg)][hub]
 [![Docker Stars](https://img.shields.io/docker/stars/spritsail/drone-notify.svg)][hub]
 [![Build Status](https://drone.spritsail.io/api/badges/spritsail/drone-notify/status.svg)][drone]
-[![Last Build](https://api.spritsail.io/badge/lastbuild/spritsail/drone-notify:latest)][drone]
 
 This script sets up a webhook listener for Drone's global webhooks. It then sends a notification to a Telegram channel every time a build passes or fails.
 
