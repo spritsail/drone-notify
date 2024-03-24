@@ -266,6 +266,6 @@ if __name__ == "__main__":
         log.info("Caught ^C, stopping")
         loop.stop()
     except Exception as e:  # pylint: disable=broad-except
-        log.info("Caught exception, stopping: %s", e)
+        log.exception("Caught exception, stopping: %s", e)
         loop.stop()
         sys.exit(1)
