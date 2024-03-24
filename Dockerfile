@@ -1,6 +1,6 @@
 FROM spritsail/alpine:3.19
 
-ARG NOTIFY_VER=1.4
+ARG NOTIFY_VER=1.5
 
 LABEL maintainer="Adam Dodman <dronenotify@spritsail.io>" \
       org.label-schema.vendor="Spritsail" \
@@ -19,4 +19,4 @@ RUN --mount=type=bind,target=/src,rw \
 WORKDIR /config
 VOLUME ["/config"]
 
-CMD ["/usr/bin/python3", "-m", "drone_notify", "/config/notify.conf"]
+CMD ["/usr/bin/python3", "-m", "drone_notify"]

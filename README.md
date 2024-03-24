@@ -10,13 +10,13 @@
 [![Docker Stars](https://img.shields.io/docker/stars/spritsail/drone-notify.svg)][hub]
 [![Build Status](https://drone.spritsail.io/api/badges/spritsail/drone-notify/status.svg)][drone]
 
-This script sets up a webhook listener for Drone's global webhooks. It then sends a notification to a Telegram channel every time a build passes or fails.
+This script sets up a webhook listener for Drone's global webhooks. It then sends notification(s) to Telegram every time a build passes or fails.
 
 ## Getting Started
 
-Run the docker container with a config file (notify.conf) mounted to /config/notify.conf. Configure the required parameters. At the bare minimum a Telegram bot token (`main.token`) and default channel (`channels.default`) will need to be added.
+Run the docker container with a config file (notify.toml) mounted to /config/notify.toml. Configure the required parameters. At the bare minimum a Telegram bot (`[telegram.bot."my bot name"]`) and at least one notifier (`[notifier."my notifier"]`) referencing that bot (`bot = "my bot name"`) will need to be added.
 
-An example config file can be found in `notify.conf.example`
+An example config file can be found in `notify.toml.example`
 
 Then run the container:
 
@@ -24,7 +24,7 @@ Then run the container:
 docker run -d \
     --name=drone-notify \
     --restart=always \
-    -v path/to/notify.conf:/config/notify.conf \
+    -v path/to/notify.toml:/config/notify.toml \
     spritsail/drone-notify
 ```
 
@@ -40,7 +40,7 @@ services:
       - DRONE_WEBHOOK_SECRET=YOUR_SECRET
 
   notify:
-    image: spritsail/drone-notify:1.3
+    image: spritsail/drone-notify:1.5
     volumes:
-      - path/to/notify.conf:/config/notify.conf
+      - path/to/notify.toml:/config/notify.toml
 ```
