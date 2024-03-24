@@ -257,7 +257,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         loop.add_signal_handler(signal.SIGTERM, loop.stop)
         loop.add_signal_handler(signal.SIGINT, loop.stop)
         loop.run_until_complete(startup())
