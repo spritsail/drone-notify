@@ -12,17 +12,18 @@ import importlib.metadata
 import ipaddress
 import logging
 import os.path
-import signal
 import socket
 import sys
+from collections.abc import Callable, Coroutine
 from html import escape
+from typing import Any
 
 from aiohttp import web
 from aiohttp.typedefs import Middleware
 
 from drone_notify.config import Config, load_toml_file
 from drone_notify.digest import DigestVerifier
-from drone_notify.drone import WebhookEvent, WebhookRequest
+from drone_notify.drone import Build, Repo, WebhookEvent, WebhookRequest
 from drone_notify.http_signature import verify_drone_signature
 from drone_notify.notify import Notifier, load_notifiers
 
@@ -74,30 +75,31 @@ def generate_msg(event: WebhookRequest) -> str:
             stage_state = escape(stage.status)
             time = format_duration(stage.started, stage.stopped)
             emoji = BUILD_STATUS_EMOJI.get(stage.status, "❔")
-            multi_stage += f"• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n"
+            multi_stage += f"• {stage_name}     <b>{stage_state}</b> in {time} {emoji}<br/>"
 
-        multi_stage += "\n"
+        multi_stage += "<br/>"
 
     drone_link = f"{event.system.link}/{event.repo.slug}/{event.build.number}"
 
-    try:
-        commit_firstline, commit_rest = event.build.message.split("\n", 1)
-        commit_rest = "-----\n" + commit_rest.strip()
-    except ValueError:
-        commit_firstline = event.build.message
-        commit_rest = ""
+    if "\n" in event.build.message:
+        msg_lines = event.build.message.split("\n")
+        msg_firstline = escape(msg_lines.pop(0))
+        msg_rest = "<br/>-----" + "<br/>".join(map(lambda l: escape(l.strip()), msg_lines))
+    else:
+        msg_firstline = escape(event.build.message)
+        msg_rest = ""
 
     return (
-        "<b>{repo} [{is_pr}{branch}]</b> #{number}: <b>{status}</b> in {time}\n"
-        + "<a href='{drone_link}'>{drone_link}</a>\n"
+        "<b>{repo} [{is_pr}{branch}]</b> #{number}: <b>{status}</b> in {time}<br/>"
+        + "<a href='{drone_link}'>{drone_link}</a><br/>"
         + "{multi_stage}<a href='{git_link}'>#{commit:7.7}</a> ({committer}): "
-        + "<i>{commit_firstline}</i>\n{commit_rest}"
+        + "<i>{msg_firstline}</i>{msg_rest}"
     ).format(
         is_pr=is_pr,
         branch=escape(event.build.target),
         commit=escape(event.build.after),
-        commit_firstline=escape(commit_firstline),
-        commit_rest=escape(commit_rest),
+        msg_firstline=msg_firstline,
+        msg_rest=msg_rest,
         committer=escape(event.build.author_login),
         drone_link=escape(drone_link),
         git_link=escape(event.build.link),
@@ -127,7 +129,22 @@ async def do_notify(notifiers: list[Notifier], event: WebhookRequest) -> None:
         return
 
     message = generate_msg(event)
-    await asyncio.gather(*(map(lambda n: n.send(message), filtered)))
+    await asyncio.gather(*(map(lambda n: send_to(n, message, event.repo, event.build), filtered)))
+
+
+async def send_to(notifier: Notifier, message: str, repo: Repo, build: Build) -> None:
+    try:
+        await notifier.send(message)
+        log.info(
+            "Sent %s notification for %s #%d to %s with %s",
+            notifier.kind.capitalize(),
+            repo.slug,
+            build.number,
+            notifier,
+            notifier.bot,
+        )
+    except Exception as exc:  # pylint: disable=broad-except
+        log.exception("Failed to send notification: %s", exc)
 
 
 async def hook(notifiers: list[Notifier], request: web.Request) -> web.StreamResponse:
@@ -148,7 +165,6 @@ async def hook(notifiers: list[Notifier], request: web.Request) -> web.StreamRes
 
         if event.build.status in VALID_BUILD_STATES:
             await do_notify(notifiers, event)
-            log.debug("Returning %s to %s", event.build.status, request.remote)
             return web.Response(body=event.build.status)
 
     # Default to blackholing it. Om nom nom.
@@ -156,7 +172,7 @@ async def hook(notifiers: list[Notifier], request: web.Request) -> web.StreamRes
     return web.Response(body=b"accepted")
 
 
-async def startup(config: Config) -> None:
+async def startup(config: Config) -> Callable[[], Coroutine[Any, Any, None]]:
     """
     drone-notify entrypoint
     """
@@ -191,13 +207,20 @@ async def startup(config: Config) -> None:
     await site.start()
     log.info("Listening on %s", hostport)
 
+    async def teardown() -> None:
+        log.info("Stopping...")
+        await site.stop()
+        await asyncio.gather(*[bot.stop() for bot in bots])
+
+    return teardown
+
 
 if __name__ == "__main__":
     # Configure stdout logging
     logging.basicConfig(
         level=logging.INFO,
         datefmt="%Y-%m-%dT%H:%M:%SZ",
-        format="[%(asctime)s] %(levelname)s - %(message)s",
+        format="[%(asctime)s] [%(name)s] %(levelname)s - %(message)s",
         stream=sys.stdout,
     )
 
@@ -217,17 +240,20 @@ if __name__ == "__main__":
     if cfg.main.debug:
         log.setLevel(logging.DEBUG)
 
+    shutdown = None
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.add_signal_handler(signal.SIGTERM, loop.stop)
-        loop.add_signal_handler(signal.SIGINT, loop.stop)
-        loop.run_until_complete(startup(cfg))
+        shutdown = loop.run_until_complete(startup(cfg))
         loop.run_forever()
     except KeyboardInterrupt:
         log.info("Caught ^C, stopping")
+        if shutdown is not None:
+            loop.run_until_complete(shutdown())
         loop.stop()
-    except Exception as e:  # pylint: disable=broad-except
-        log.exception("Caught exception, stopping: %s", e)
+    except Exception as exc:  # pylint: disable=broad-except
+        log.exception("Caught exception, stopping: %s", exc)
+        if shutdown is not None:
+            loop.run_until_complete(shutdown())
         loop.stop()
         sys.exit(1)

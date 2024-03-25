@@ -56,6 +56,10 @@ class Bot(ABC):
     @abstractmethod
     def __init__(self, name: str, cfg: BaseBotConfig):
         self.name = name
+        self.kind = cfg.kind
+
+    def __str__(self) -> str:
+        return self.name
 
     @abstractmethod
     async def start(self) -> None:
@@ -77,9 +81,13 @@ class Notifier(ABC):
     @abstractmethod
     def __init__(self, name: str, bot: Bot, cfg: BaseNotifierConfig):
         self.name = name
+        self.kind = cfg.kind
         self.bot = bot
         self.repos = cfg.repos
         self.status = cfg.status
+
+    def __str__(self) -> str:
+        return self.name
 
     @abstractmethod
     async def send(self, message: str) -> None:
