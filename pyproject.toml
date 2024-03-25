@@ -3,9 +3,14 @@ name = "drone-notify"
 version = "1.5"
 dependencies = [
   "aiohttp>=3.8",
+  "aiosqlite",
+  "asyncpg",
   "dacite",
+  "html2text",
   "http-message-signatures>=0.4.1",
+  "mautrix",
   "pydantic",
+  "python-olm",
 ]
 
 [project.optional-dependencies]

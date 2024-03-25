@@ -13,8 +13,17 @@ LABEL maintainer="Adam Dodman <dronenotify@spritsail.io>" \
 # https://github.com/pypa/pip/issues/3930
 # https://github.com/pypa/setuptools/issues/3237
 RUN --mount=type=bind,target=/src,rw \
+    apk add --no-cache --virtual .build-deps \
+        cmake \
+        gcc \
+        g++ \
+        make \
+        musl-dev \
+        python3-dev \
+        && \
     apk add --no-cache py3-pip && \
-    pip install --break-system-packages /src
+    pip install --break-system-packages /src && \
+    apk del .build-deps
 
 WORKDIR /config
 VOLUME ["/config"]
