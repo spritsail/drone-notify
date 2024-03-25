@@ -12,7 +12,6 @@ import importlib.metadata
 import ipaddress
 import logging
 import os.path
-import signal
 import socket
 import sys
 
@@ -21,7 +20,7 @@ from aiohttp.typedefs import Middleware
 
 from drone_notify.config import NotifierConfig, load_toml_file
 from drone_notify.digest import DigestVerifier
-from drone_notify.drone import WebhookEvent, WebhookRequest
+from drone_notify.drone import Build, Repo, WebhookEvent, WebhookRequest
 from drone_notify.http_signature import verify_drone_signature
 from drone_notify.notify import Bot, Notifier, load_notifiers
 
@@ -73,30 +72,31 @@ def generate_msg(event: WebhookRequest) -> str:
             stage_state = html.escape(stage.status)
             time = format_duration(stage.started, stage.stopped)
             emoji = BUILD_STATUS_EMOJI.get(stage.status, "❔")
-            multi_stage += f"• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n"
+            multi_stage += f"• {stage_name}     <b>{stage_state}</b> in {time} {emoji}<br/>"
 
-        multi_stage += "\n"
+        multi_stage += "<br/>"
 
     drone_link = f"{event.system.link}/{event.repo.slug}/{event.build.number}"
 
-    try:
-        commit_firstline, commit_rest = event.build.message.split("\n", 1)
-        commit_rest = "-----\n" + commit_rest.strip()
-    except ValueError:
-        commit_firstline = event.build.message
-        commit_rest = ""
+    if "\n" in event.build.message:
+        msg_lines = event.build.message.split("\n")
+        msg_firstline = html.escape(msg_lines.pop(0))
+        msg_rest = "<br/>-----" + "<br/>".join(map(lambda l: html.escape(l.strip()), msg_lines))
+    else:
+        msg_firstline = html.escape(event.build.message)
+        msg_rest = ""
 
     return (
-        "<b>{repo} [{is_pr}{branch}]</b> #{number}: <b>{status}</b> in {time}\n"
-        + "<a href='{drone_link}'>{drone_link}</a>\n"
+        "<b>{repo} [{is_pr}{branch}]</b> #{number}: <b>{status}</b> in {time}<br/>"
+        + "<a href='{drone_link}'>{drone_link}</a><br/>"
         + "{multi_stage}<a href='{git_link}'>#{commit:7.7}</a> ({committer}): "
-        + "<i>{commit_firstline}</i>\n{commit_rest}"
+        + "<i>{msg_firstline}</i>{msg_rest}"
     ).format(
         is_pr=is_pr,
         branch=html.escape(event.build.target),
         commit=html.escape(event.build.after),
-        commit_firstline=html.escape(commit_firstline),
-        commit_rest=html.escape(commit_rest),
+        commit_firstline=html.escape(msg_firstline),
+        commit_rest=html.escape(msg_rest),
         committer=html.escape(event.build.author_login),
         drone_link=html.escape(drone_link),
         git_link=html.escape(event.build.link),
@@ -106,6 +106,21 @@ def generate_msg(event: WebhookRequest) -> str:
         status=html.escape(event.build.status).upper(),
         time=format_duration(event.build.started, event.build.finished),
     )
+
+
+async def send_to(notifier: Notifier, message: str, repo: Repo, build: Build) -> None:
+    try:
+        await notifier.send(message)
+        log.info(
+            "Sent %s notification for %s #%d to %s with %s",
+            notifier.kind.capitalize(),
+            repo.slug,
+            build.number,
+            notifier,
+            notifier.bot,
+        )
+    except Exception as exc:  # pylint: disable=broad-except
+        log.exception("Failed to send notification: %s", exc)
 
 
 class DroneNotifier:
@@ -190,7 +205,9 @@ class DroneNotifier:
             return
 
         message = generate_msg(event)
-        await asyncio.gather(*(map(lambda n: n.send(message), filtered)))
+        await asyncio.gather(
+            *(map(lambda n: send_to(n, message, event.repo, event.build), filtered))
+        )
 
     async def hook(self, request: web.Request) -> web.StreamResponse:
         """
@@ -210,7 +227,6 @@ class DroneNotifier:
 
             if event.build.status in VALID_BUILD_STATES:
                 await self.do_notify(event)
-                log.debug("Returning %s to %s", event.build.status, request.remote)
                 return web.Response(body=event.build.status)
 
         # Default to blackholing it. Om nom nom.
@@ -223,7 +239,7 @@ if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
         datefmt="%Y-%m-%dT%H:%M:%SZ",
-        format="[%(asctime)s] %(levelname)s - %(message)s",
+        format="[%(asctime)s] [%(name)s] %(levelname)s - %(message)s",
         stream=sys.stdout,
     )
 
@@ -254,8 +270,6 @@ if __name__ == "__main__":
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.add_signal_handler(signal.SIGTERM, loop.stop)
-        loop.add_signal_handler(signal.SIGINT, loop.stop)
         loop.run_until_complete(dn.start())
         loop.run_forever()
     except KeyboardInterrupt:

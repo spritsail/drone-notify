@@ -56,6 +56,9 @@ class Bot(ABC):
     def __init__(self, name: str):
         self.name = name
 
+    def __str__(self) -> str:
+        return self.name
+
     @abstractmethod
     async def start(self) -> None:
         """Start the bot"""
@@ -78,6 +81,9 @@ class Notifier[NCT: NotifierConfig](ABC):
         self.name = name
         self.repos = config.repos
         self.status = config.status
+
+    def __str__(self) -> str:
+        return self.name
 
     @abstractmethod
     async def send(self, message: str) -> None:

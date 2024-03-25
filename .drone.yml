@@ -11,7 +11,7 @@ steps:
     image: python:alpine
     pull: always
     commands:
-      - apk add --no-cache gcc libc-dev
+      - apk add --no-cache gcc libc-dev make
       - pip install --break-system-packages -e '.[lint]'
       - black --check .
       - isort --check .
@@ -23,7 +23,7 @@ steps:
     image: python:alpine
     pull: always
     commands:
-      - apk add --no-cache gcc libc-dev
+      - apk add --no-cache gcc libc-dev make
       - pip install --break-system-packages -e '.[test]'
       - pytest
 

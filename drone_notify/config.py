@@ -8,6 +8,7 @@ import os
 import tomllib
 from typing import Annotated, Literal
 
+from mautrix.types import RoomID, UserID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 log = logging.getLogger(__name__)
@@ -59,6 +60,26 @@ class TelegramNotifyConfig(NotifierConfig):
     chat_id: str
 
 
+class MatrixBotConfig(BaseBotConfig):
+    """
+    A Bot object for sending messages to Matrix as a user
+    """
+
+    kind: Literal["matrix"]
+    mxid: UserID
+    access_token: str
+    db_path: str
+
+
+class MatrixNotifyConfig(BaseNotifierConfig):
+    """
+    A Matrix notifier type that uses a bot to notify a Matrix room
+    """
+
+    kind: Literal["matrix"]
+    room_id: RoomID
+
+
 class Main(StrictModel):
     """
     Main application-level configuration options
@@ -76,8 +97,10 @@ class Config(StrictModel):
     """
 
     main: Main
-    bot: dict[str, Annotated[TelegramBotConfig, Field(discriminator="kind")]]
-    notifier: dict[str, Annotated[TelegramNotifyConfig, Field(discriminator="kind")]]
+    bot: dict[str, Annotated[TelegramBotConfig | MatrixBotConfig, Field(discriminator="kind")]]
+    notifier: dict[
+        str, Annotated[TelegramNotifyConfig | MatrixNotifyConfig, Field(discriminator="kind")]
+    ]
 
     @model_validator(mode="after")
     def match_notifiers(self) -> "Config":

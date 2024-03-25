@@ -9,6 +9,7 @@ from fnmatch import fnmatchcase
 from drone_notify.config import Config, NotifierConfig
 from drone_notify.notify.types import Bot, Notifier, NotifyException, Registry
 
+from .matrix import MatrixBot, MatrixNotifier
 from .telegram import TelegramBot, TelegramNotifier
 
 log = logging.getLogger(__name__)
@@ -19,6 +20,8 @@ NotifierRegistry = Registry[str, Notifier[NotifierConfig]]()
 
 BotRegistry.register("telegram", TelegramBot)
 NotifierRegistry.register("telegram", TelegramNotifier)
+BotRegistry.register("matrix", MatrixBot)
+NotifierRegistry.register("matrix", MatrixNotifier)
 
 
 def load_notifiers(cfg: Config) -> tuple[list[Bot], list[Notifier[NotifierConfig]]]:

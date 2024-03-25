@@ -70,13 +70,16 @@ class TelegramBot(Bot):
             raise_for_status=True,
         )
         resp = await self.request("getMe")
-        log.info("Initialised Telegram bot %s (@%s)", resp["first_name"], resp["username"])
+        self.botname = resp["first_name"]
+        self.username = resp["username"]
+        log.info("Initialised Telegram bot %s (@%s)", self.botname, self.username)
 
     async def stop(self) -> None:
         """
         Shut down the bot
         """
         if self.session is not None:
+            log.info("Stopping Telegram http clientsession")
             await self.session.close()
             self.session = None
 
@@ -107,6 +110,6 @@ class TelegramNotifier(Notifier[TelegramNotifyConfig]):
                 "parse_mode": "html",
                 "disable_web_page_preview": "true",
                 "chat_id": self.chat_id,
-                "text": message,
+                "text": message.replace("<br/>", "\n"),
             },
         )
