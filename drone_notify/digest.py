@@ -58,7 +58,7 @@ class DigestVerifier:
         self.algos = supported_algorithms if supported_algorithms is not None else DIGEST_ALGORITHMS
 
     @aiohttp.web.middleware
-    async def verify_digest_headers(self, request: Request, handler: Handler) -> StreamResponse:
+    async def __call__(self, request: Request, handler: Handler) -> StreamResponse:
         """
         aiohttp middleware to verify HTTP 'Digest' header(s)
         """

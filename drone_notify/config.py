@@ -5,9 +5,9 @@ configuration data.
 
 import logging
 import os
-import tomllib
 from typing import Annotated, Literal
 
+import tomllib
 from mautrix.types import RoomID, UserID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
