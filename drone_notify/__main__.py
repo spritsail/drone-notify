@@ -18,11 +18,11 @@ from html import escape
 
 import aiohttp
 from aiohttp import web
+from aiohttp.typedefs import Middleware
 
 from drone_notify.digest import DigestVerifier
 from drone_notify.drone import WebhookEvent, WebhookRequest
 from drone_notify.http_signature import verify_drone_signature
-from drone_notify.types import Middleware
 
 log = logging.getLogger(__name__)
 

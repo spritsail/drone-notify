@@ -11,9 +11,8 @@ from collections.abc import Callable
 from typing import Union
 
 import aiohttp.web
+from aiohttp.typedefs import Handler
 from aiohttp.web import HTTPUnauthorized, Request, StreamResponse
-
-from drone_notify.types import Handler
 
 log = logging.getLogger(__name__)
 

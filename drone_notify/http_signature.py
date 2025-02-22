@@ -9,12 +9,13 @@ https://datatracker.ietf.org/doc/html/draft-cavage-http-signatures-12
 
 import base64
 import logging
-from collections.abc import Awaitable, Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, fields
 
 import aiohttp.web
 import http_sfv.dictionary
 import http_sfv.util
+from aiohttp.typedefs import Handler, Middleware
 from aiohttp.web import HTTPUnauthorized, Request, StreamResponse
 from http_message_signatures.algorithms import HMAC_SHA256  # type: ignore[attr-defined]
 from http_message_signatures.signatures import (  # type: ignore[attr-defined]
@@ -22,11 +23,6 @@ from http_message_signatures.signatures import (  # type: ignore[attr-defined]
     HTTPSignatureKeyResolver,
 )
 from multidict import CIMultiDict
-
-# FIXME: import these from aiohttp.typedefs when aiohttp 4.x is released
-Handler = Callable[[Request], Awaitable[StreamResponse]]
-Middleware = Callable[[Request, Handler], Awaitable[StreamResponse]]
-
 
 log = logging.getLogger(__name__)
 
