@@ -95,8 +95,8 @@ def generate_msg(event: WebhookRequest) -> str:
         is_pr=is_pr,
         branch=html.escape(event.build.target),
         commit=html.escape(event.build.after),
-        commit_firstline=html.escape(msg_firstline),
-        commit_rest=html.escape(msg_rest),
+        msg_firstline=msg_firstline,
+        msg_rest=msg_rest,
         committer=html.escape(event.build.author_login),
         drone_link=html.escape(drone_link),
         git_link=html.escape(event.build.link),
@@ -108,7 +108,12 @@ def generate_msg(event: WebhookRequest) -> str:
     )
 
 
-async def send_to(notifier: Notifier, message: str, repo: Repo, build: Build) -> None:
+async def send_to(
+    notifier: Notifier[NotifierConfig], message: str, repo: Repo, build: Build
+) -> None:
+    """
+    Send a notification message to a given notifier
+    """
     try:
         await notifier.send(message)
         log.info(
@@ -128,8 +133,6 @@ class DroneNotifier:
     Drone Notifier main application logic
     """
 
-    site: web.SockSite | None
-
     def __init__(
         self,
         host: str,
@@ -145,13 +148,16 @@ class DroneNotifier:
         self.notifiers = notifiers
         self.webhook_secret = webhook_secret
 
-        self.site = None
+        # Initialised during start()
+        self.site: web.SockSite | None = None
 
     async def start(self) -> None:
         """
-        drone-notify entrypoint
+        Start the drone notifier
         """
-        log.info("Started Drone Notify v%s", VERSION)
+        log.info(
+            "Started Drone Notify v%s. Loaded %d notifiers", VERSION, len(self.config.notifier)
+        )
         log.debug("Debug logging is enabled - prepare for logspam")
 
         await asyncio.gather(*[bot.start() for bot in self.bots])
@@ -192,9 +198,13 @@ class DroneNotifier:
         """
         Dispatch notifications to all notifiers
         """
+        if self.notifiers is None:
+            return
+
         if event.build is None or event.repo is None or event.system is None:
             # Satisfy type checkers. We already checked these
             return
+
         if "[NOTIFY SKIP]" in event.build.message or "[SKIP NOTIFY]" in event.build.message:
             log.debug("Skipping notification as commit message requested it")
             return
@@ -213,6 +223,8 @@ class DroneNotifier:
         """
         Handle incoming webhooks from (hopefully) Drone
         """
+        assert self.notifiers is not None
+
         data = await request.json()
         log.debug("Received a webhook request from %s: %s", request.remote, data)
         event = WebhookRequest.from_dict(data)
