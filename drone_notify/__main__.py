@@ -72,7 +72,7 @@ async def send_telegram_msg(chatid: str, message: str, parse_mode: str = "html")
             async with session.post(
                 f"https://api.telegram.org/bot{ttoken}/sendmessage",
                 json=postdata,
-                timeout=60,
+                timeout=aiohttp.ClientTimeout(total=60),
             ) as resp:
                 if not resp.ok:
                     respbody = await resp.text()
