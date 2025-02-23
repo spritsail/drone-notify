@@ -179,9 +179,8 @@ async def test_verifier_middleware(
     expected_status: int,
     aiohttp_client: Any,
 ) -> None:
-    verifier = DigestVerifier(require=require, supported_algorithms=algorithms)
     app = aiohttp.web.Application()
-    app.middlewares.append(verifier.verify_digest_headers)
+    app.middlewares.append(DigestVerifier(require=require, supported_algorithms=algorithms))
     app.router.add_route("GET", "/", handler)
     client = await aiohttp_client(app)
     resp = await client.get(

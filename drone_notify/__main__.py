@@ -205,7 +205,7 @@ async def startup() -> None:
         middlewares.append(verify_drone_signature(config["main"]["secret"].encode()))
 
     # Drone adds the `Digest:` header to all of it's requests
-    middlewares.append(DigestVerifier(require=True).verify_digest_headers)
+    middlewares.append(DigestVerifier(require=True))
 
     handler = web.Application(middlewares=middlewares)
     handler.add_routes([web.post("/hook", hook)])
