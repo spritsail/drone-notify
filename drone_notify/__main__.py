@@ -8,13 +8,13 @@ builds complete, with support for multi-stage builds and pull-requests
 
 import asyncio
 import configparser
+import html
 import importlib.metadata
 import ipaddress
 import logging
 import signal
 import socket
 import sys
-from html import escape
 
 import aiohttp
 from aiohttp import web
@@ -96,14 +96,14 @@ async def do_notify(event: WebhookRequest) -> None:
     is_pr = ""
     if event.build.event == "pull_request":
         # This isn't pretty, but it works.
-        is_pr = f"#{escape(event.build.ref.split('/', 3)[2])} → "
+        is_pr = f"#{html.escape(event.build.ref.split('/', 3)[2])} → "
 
     multi_stage = ""
 
     if event.build.stages is not None and len(event.build.stages) > 1:
         for stage in event.build.stages:
-            stage_name = escape(stage.name)
-            stage_state = escape(stage.status)
+            stage_name = html.escape(stage.name)
+            stage_state = html.escape(stage.status)
             time = format_duration(stage.started, stage.stopped)
             emoji = BUILD_STATUS_EMOJI.get(stage.status, "❔")
             multi_stage += f"• {stage_name}     <b>{stage_state}</b> in {time} {emoji}\n"
@@ -128,17 +128,17 @@ async def do_notify(event: WebhookRequest) -> None:
 
     notifymsg = notifytmpl.format(
         PR=is_pr,
-        branch=escape(event.build.target),
-        commit=escape(event.build.after),
-        commit_firstline=escape(commit_firstline),
-        commit_rest=escape(commit_rest),
-        committer=escape(event.build.author_login),
-        drone_link=escape(drone_link),
-        git_link=escape(event.build.link),
+        branch=html.escape(event.build.target),
+        commit=html.escape(event.build.after),
+        commit_firstline=html.escape(commit_firstline),
+        commit_rest=html.escape(commit_rest),
+        committer=html.escape(event.build.author_login),
+        drone_link=html.escape(drone_link),
+        git_link=html.escape(event.build.link),
         multi_stage=multi_stage,
         number=event.build.number,
-        repo=escape(event.repo.slug),
-        status=escape(event.build.status).upper(),
+        repo=html.escape(event.repo.slug),
+        status=html.escape(event.build.status).upper(),
         time=format_duration(event.build.started, event.build.finished),
     )
 
