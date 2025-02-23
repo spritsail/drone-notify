@@ -1,6 +1,7 @@
 [project]
 name = "drone-notify"
 version = "1.4"
+requires-python = ">=3.12"
 dependencies = [
   "aiohttp>=3.8",
   "dacite",

@@ -16,13 +16,13 @@ import signal
 import socket
 import sys
 
-import aiohttp
 from aiohttp import web
 from aiohttp.typedefs import Middleware
 
 from drone_notify.digest import DigestVerifier
 from drone_notify.drone import WebhookEvent, WebhookRequest
 from drone_notify.http_signature import verify_drone_signature
+from drone_notify.notify import telegram
 
 log = logging.getLogger(__name__)
 
@@ -55,44 +55,10 @@ def format_duration(start: int | float, end: int | float) -> str:
     return datestr
 
 
-async def send_telegram_msg(chatid: str, message: str, parse_mode: str = "html") -> None:
+def generate_msg(event: WebhookRequest) -> str:
     """
-    Send a formatted message to a Telegram chat
+    Generate a HTML formatted notification message from Webhook event data
     """
-    postdata = {
-        "parse_mode": parse_mode,
-        "disable_web_page_preview": "true",
-        "chat_id": chatid,
-        "text": message,
-    }
-
-    async with aiohttp.ClientSession() as session:
-        respbody: str | None = None
-        try:
-            async with session.post(
-                f"https://api.telegram.org/bot{ttoken}/sendmessage",
-                json=postdata,
-                timeout=aiohttp.ClientTimeout(total=60),
-            ) as resp:
-                if not resp.ok:
-                    respbody = await resp.text()
-                resp.raise_for_status()
-        except aiohttp.ClientResponseError:
-            log.exception("Failed to send notification for %s: %s", postdata, respbody)
-
-
-async def do_notify(event: WebhookRequest) -> None:
-    """
-    Generate a formatted notification message and send it
-    """
-    if event.build is None or event.repo is None or event.system is None:
-        # Satisfy type checkers. We already checked these
-        return
-
-    if "[NOTIFY SKIP]" in event.build.message or "[SKIP NOTIFY]" in event.build.message:
-        log.debug("Skipping build as flags set")
-        return
-
     is_pr = ""
     if event.build.event == "pull_request":
         # This isn't pretty, but it works.
@@ -119,15 +85,13 @@ async def do_notify(event: WebhookRequest) -> None:
         commit_firstline = event.build.message
         commit_rest = ""
 
-    notifytmpl = (
-        "<b>{repo} [{PR}{branch}]</b> #{number}: <b>{status}</b> in {time}\n"
+    return (
+        "<b>{repo} [{is_pr}{branch}]</b> #{number}: <b>{status}</b> in {time}\n"
         + "<a href='{drone_link}'>{drone_link}</a>\n"
         + "{multi_stage}<a href='{git_link}'>#{commit:7.7}</a> ({committer}): "
         + "<i>{commit_firstline}</i>\n{commit_rest}"
-    )
-
-    notifymsg = notifytmpl.format(
-        PR=is_pr,
+    ).format(
+        is_pr=is_pr,
         branch=html.escape(event.build.target),
         commit=html.escape(event.build.after),
         commit_firstline=html.escape(commit_firstline),
@@ -142,23 +106,25 @@ async def do_notify(event: WebhookRequest) -> None:
         time=format_duration(event.build.started, event.build.finished),
     )
 
-    log.info(
-        "Sending Telegram notification(s) for %s #%d",
-        event.repo.slug,
-        event.build.number,
-    )
 
-    tchat = config["channels"].get(event.repo.slug, default_channel)
+async def do_notify(event: WebhookRequest) -> None:
+    """
+    Dispatch notifications to all notifiers
+    """
+    if event.build is None or event.repo is None or event.system is None:
+        # Satisfy type checkers. We already checked these
+        return
+    if "[NOTIFY SKIP]" in event.build.message or "[SKIP NOTIFY]" in event.build.message:
+        log.debug("Skipping notification as commit message requested it")
+        return
 
-    senders = []
-    # Send normal telegram notification
-    senders.append(send_telegram_msg(tchat, notifymsg))
+    filtered = list(filter(lambda n: n.should_notify(event.build, event.repo), channels))
+    if not filtered:
+        log.info("No matching notifiers for %s #%d", event.repo.slug, event.build.number)
+        return
 
-    # If theres a failure channel defined & the build has failed, notify that too
-    if event.build.status != "success" and failure_channel is not None:
-        senders.append(send_telegram_msg(failure_channel, notifymsg))
-
-    await asyncio.gather(*senders)
+    message = generate_msg(event)
+    await asyncio.gather(*(map(lambda n: n.send(message), filtered)))
 
 
 async def hook(request: web.Request) -> web.StreamResponse:
@@ -191,8 +157,12 @@ async def startup() -> None:
     """
     drone-notify entrypoint
     """
-    log.info("Started Drone Notify v%s. Default Notification Channel: %s", VERSION, default_channel)
+    log.info(
+        "Started Drone Notify v%s. Default Notification Channel: %s", VERSION, channels[0].chat_id
+    )
     log.debug("Debug logging is enabled - prepare for logspam")
+
+    await tgbot.start()
 
     host = ipaddress.ip_address(config["main"].get("host", "::"))
     port = int(config["main"].get("port", "5000"))
@@ -236,25 +206,47 @@ if __name__ == "__main__":
     config = configparser.ConfigParser()
     config.read(cfg_path)
 
-    ttoken = config["main"]["token"]
-    default_channel = config["channels"]["default"]
-
     if config.has_option("main", "debug"):
         if config["main"].getboolean("debug"):
             log.setLevel(logging.DEBUG)
 
-    # If a failure channel exists, assign it to a var
-    failure_channel: str | None = None
-
-    if config.has_option("channels", "failure"):
-        failure_channel = config["channels"]["failure"]
-
-    if not ttoken:
+    if not config.has_option("main", "token"):
         log.error("Required variable `main.token' empty or unset")
         sys.exit(1)
-    elif not default_channel:
+    elif not config.has_option("channels", "default"):
         log.error("Required value `channels.default' empty or unset")
         sys.exit(1)
+
+    botconfig = telegram.TelegramBotConfig(bot_token=config["main"]["token"])
+    tgbot = telegram.TelegramBot("bot", botconfig)
+
+    # Use the default notifier for all repos, except those explicitly overriden by other notifiers
+    default_repos = list(map(lambda r: "!" + r, config["channels"].keys() - {"default", "failure"}))
+    channels = [
+        telegram.TelegramNotifier(
+            "default",
+            tgbot,
+            telegram.TelegramNotifyConfig(
+                repos=default_repos,
+                status=["success"],
+                chat_id=config["channels"]["default"],
+            ),
+        )
+    ]
+    if config.has_option("channels", "failure"):
+        failconfig = telegram.TelegramNotifyConfig(
+            repos=default_repos,
+            status=["failure", "error", "killed"],
+            chat_id=config["channels"]["failure"],
+        )
+        channels.append(telegram.TelegramNotifier("failure", tgbot, failconfig))
+    for repo, chat_id in config["channels"].items():
+        if repo in {"default", "failure"}:
+            continue
+        channelconfig = telegram.TelegramNotifyConfig(
+            repos=[repo], status=["success"], chat_id=chat_id
+        )
+        channels.append(telegram.TelegramNotifier(repo, tgbot, channelconfig))
 
     try:
         loop = asyncio.new_event_loop()
