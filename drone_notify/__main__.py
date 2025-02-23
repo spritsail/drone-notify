@@ -7,11 +7,11 @@ builds complete, with support for multi-stage builds and pull-requests
 """
 
 import asyncio
-import configparser
 import html
 import importlib.metadata
 import ipaddress
 import logging
+import os.path
 import signal
 import socket
 import sys
@@ -19,12 +19,11 @@ import sys
 from aiohttp import web
 from aiohttp.typedefs import Middleware
 
-from drone_notify.config import NotifierConfig
+from drone_notify.config import NotifierConfig, load_toml_file
 from drone_notify.digest import DigestVerifier
 from drone_notify.drone import WebhookEvent, WebhookRequest
 from drone_notify.http_signature import verify_drone_signature
-from drone_notify.notify import telegram
-from drone_notify.notify.types import Bot, Notifier
+from drone_notify.notify import Bot, Notifier, load_notifiers
 
 log = logging.getLogger(__name__)
 
@@ -228,60 +227,30 @@ if __name__ == "__main__":
         stream=sys.stdout,
     )
 
-    # TODO: Add some sanity checks to make sure the file exists, is readable
-    # and contains everything we need.
-    cfg_path: str = sys.argv[1] if len(sys.argv) > 1 else "notify.conf"
-
-    config = configparser.ConfigParser()
-    config.read(cfg_path)
-
-    if config.has_option("main", "debug"):
-        if config["main"].getboolean("debug"):
-            log.setLevel(logging.DEBUG)
-
-    if not config.has_option("main", "token"):
-        log.error("Required variable `main.token' empty or unset")
-        sys.exit(1)
-    elif not config.has_option("channels", "default"):
-        log.error("Required value `channels.default' empty or unset")
-        sys.exit(1)
-
-    host = config["main"].get("host", "::")
-    port = int(config["main"].get("port", "5000"))
-
-    botconfig = telegram.TelegramBotConfig(bot_token=config["main"]["token"])
-    tgbot = telegram.TelegramBot("bot", botconfig)
-    bots: list[Bot] = [tgbot]
-
-    # Use the default notifier for all repos, except those explicitly overriden by other notifiers
-    default_repos = list(map(lambda r: "!" + r, config["channels"].keys() - {"default", "failure"}))
-    channels: list[Notifier[NotifierConfig]] = [
-        telegram.TelegramNotifier(
-            "default",
-            tgbot,
-            telegram.TelegramNotifyConfig(
-                repos=default_repos,
-                status=["success"],
-                chat_id=config["channels"]["default"],
-            ),
+    if len(sys.argv) > 1:
+        cfg_path = sys.argv[1]
+    elif os.path.isfile("notify.toml"):
+        cfg_path = "notify.toml"
+    else:
+        log.warning("Falling back to old config filename 'notify.conf'")
+        log.warning(
+            "Configuration has migrated to TOML format. Please update your configuration file"
         )
-    ]
-    if config.has_option("channels", "failure"):
-        failconfig = telegram.TelegramNotifyConfig(
-            repos=default_repos,
-            status=["failure", "error", "killed"],
-            chat_id=config["channels"]["failure"],
-        )
-        channels.append(telegram.TelegramNotifier("failure", tgbot, failconfig))
-    for repo, chat_id in config["channels"].items():
-        if repo in {"default", "failure"}:
-            continue
-        channelconfig = telegram.TelegramNotifyConfig(
-            repos=[repo], status=["success"], chat_id=chat_id
-        )
-        channels.append(telegram.TelegramNotifier(repo, tgbot, channelconfig))
+        cfg_path = "notify.conf"
 
-    dn = DroneNotifier(host, port, bots, channels, webhook_secret=config.get("main", "secret"))
+    config = load_toml_file(cfg_path)
+
+    if config.main.debug:
+        log.setLevel(logging.DEBUG)
+
+    bots, notifiers = load_notifiers(config)
+    dn = DroneNotifier(
+        config.main.host,
+        config.main.port,
+        bots,
+        notifiers,
+        webhook_secret=config.main.secret,
+    )
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

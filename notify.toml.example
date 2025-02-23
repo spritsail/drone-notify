@@ -1,0 +1,34 @@
+[main]
+host = "::"
+port = 5000
+# optional, to validate Drone webhook requests. must match
+# DRONE_WEBHOOK_SECRET envvar in Drone. Any requests not
+# signed using this secret by Drone will 401
+#secret = "some-secret-value"
+# optional, defaults to false
+#debug = true
+
+[bot."unused"]
+kind = "telegram"
+bot_token = "aaa"
+
+[bot."drone bot"]
+kind = "telegram"
+bot_token = "023456032:AAABBBBCCCCxxxxxxxxxxyyyyyyyyyyy"
+
+[notifier."build notifications"]
+kind = "telegram"
+bot = "drone bot"
+channel = "-123456789"
+# List of build statuses to trigger a notification for. If
+# absent, all build statuses will trigger a notification.
+status = ["success", "failure"]
+# List of repos to use this notifier for. If absent, all repos
+# will trigger a notification.
+repos = [
+  "myuser/myrepo",
+  # Globs can be used
+  "myorg/*",
+  # Repos beginning with ! are ignored
+  "!myorg/ignoreme",
+]

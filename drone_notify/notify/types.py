@@ -22,7 +22,7 @@ def repo_match(notif: str, repo: str, repos: list[str]) -> bool:
     - One of the above rules prefixed with a '!', which negates the rule.
       Any matches to a negated rule returns False
     """
-    if len(repos) == 0:
+    if not repos:
         return True
 
     # Split matchers and rejectors into two lists
@@ -100,3 +100,29 @@ class Notifier[NCT: NotifierConfig](ABC):
 
 class NotifyException(Exception):
     """An exception object representing a failure in sending a notification"""
+
+
+class Registry[K, V]:
+    """
+    A registry is an exclusive mapping of key to function or object constructor
+    """
+
+    def __init__(self) -> None:
+        self.entries: dict[K, type[V]] = {}
+
+    def get(self, key: K) -> type[V]:
+        """Get the registered entry"""
+        return self[key]
+
+    def register(self, key: K, value: type[V]) -> None:
+        """Register a new entry"""
+        self[key] = value
+
+    def __getitem__(self, key: K) -> type[V]:
+        return self.entries[key]
+
+    def __setitem__(self, key: K, value: type[V]) -> None:
+        if key in self.entries:
+            raise ValueError(f"Registry already has an entry for {key}")
+
+        self.entries[key] = value

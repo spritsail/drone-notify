@@ -4,7 +4,6 @@ chats, users and channels
 """
 
 import logging
-from dataclasses import dataclass
 from typing import Any
 
 import aiohttp
@@ -15,7 +14,6 @@ from drone_notify.notify.types import Bot, Notifier, NotifyException
 log = logging.getLogger(__name__)
 
 
-@dataclass
 class TelegramBotConfig(BotConfig):
     """
     A Bot object for sending messages to Telegram as a bot user
@@ -24,13 +22,12 @@ class TelegramBotConfig(BotConfig):
     bot_token: str
 
 
-@dataclass
 class TelegramNotifyConfig(NotifierConfig):
     """
     A Telegram notifier type that uses a bot to notify a Telegram chat
     """
 
-    chat_id: str = ""
+    chat_id: str
 
 
 class TelegramBot(Bot):
