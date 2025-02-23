@@ -19,10 +19,12 @@ import sys
 from aiohttp import web
 from aiohttp.typedefs import Middleware
 
+from drone_notify.config import NotifierConfig
 from drone_notify.digest import DigestVerifier
 from drone_notify.drone import WebhookEvent, WebhookRequest
 from drone_notify.http_signature import verify_drone_signature
 from drone_notify.notify import telegram
+from drone_notify.notify.types import Bot, Notifier
 
 log = logging.getLogger(__name__)
 
@@ -107,87 +109,114 @@ def generate_msg(event: WebhookRequest) -> str:
     )
 
 
-async def do_notify(event: WebhookRequest) -> None:
+class DroneNotifier:
     """
-    Dispatch notifications to all notifiers
+    Drone Notifier main application logic
     """
-    if event.build is None or event.repo is None or event.system is None:
-        # Satisfy type checkers. We already checked these
-        return
-    if "[NOTIFY SKIP]" in event.build.message or "[SKIP NOTIFY]" in event.build.message:
-        log.debug("Skipping notification as commit message requested it")
-        return
 
-    filtered = list(filter(lambda n: n.should_notify(event.build, event.repo), channels))
-    if not filtered:
-        log.info("No matching notifiers for %s #%d", event.repo.slug, event.build.number)
-        return
+    site: web.SockSite | None
 
-    message = generate_msg(event)
-    await asyncio.gather(*(map(lambda n: n.send(message), filtered)))
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        bots: list[Bot],
+        notifiers: list[Notifier[NotifierConfig]],
+        *,
+        webhook_secret: str | None = None,
+    ) -> None:
+        self.host = host
+        self.port = port
+        self.bots = bots
+        self.notifiers = notifiers
+        self.webhook_secret = webhook_secret
 
+        self.site = None
 
-async def hook(request: web.Request) -> web.StreamResponse:
-    """
-    Handle incoming webhooks from (hopefully) Drone
-    """
-    data = await request.json()
-    log.debug("Received a webhook request from %s: %s", request.remote, data)
-    event = WebhookRequest.from_dict(data)
-    if event.event is WebhookEvent.BUILD:
-        log.debug(
-            "%s - Successfully parsed a webook for %s #%d (%s)",
-            request.remote,
-            event.repo.slug,
-            event.build.number,
-            event.build.status,
-        )
+    async def start(self) -> None:
+        """
+        drone-notify entrypoint
+        """
+        log.info("Started Drone Notify v%s", VERSION)
+        log.debug("Debug logging is enabled - prepare for logspam")
 
-        if event.build.status in VALID_BUILD_STATES:
-            await do_notify(event)
-            log.debug("Returning %s to %s", event.build.status, request.remote)
-            return web.Response(body=event.build.status)
+        await asyncio.gather(*[bot.start() for bot in self.bots])
 
-    # Default to blackholing it. Om nom nom.
-    log.debug("Not a valid build state, accepting & taking no action")
-    return web.Response(body=b"accepted")
+        host = ipaddress.ip_address(self.host)
+        hostport = ("[%s]:%d" if host.version == 6 else "%s:%d") % (host, self.port)
 
+        # Drone adds the `Digest:` header to all of it's requests
+        middlewares: list[Middleware] = [DigestVerifier(require=True)]
 
-async def startup() -> None:
-    """
-    drone-notify entrypoint
-    """
-    log.info(
-        "Started Drone Notify v%s. Default Notification Channel: %s", VERSION, channels[0].chat_id
-    )
-    log.debug("Debug logging is enabled - prepare for logspam")
+        if self.webhook_secret is not None:
+            log.debug("Enabled webhook signature verification")
+            middlewares.append(verify_drone_signature(self.webhook_secret.encode()))
 
-    await tgbot.start()
+        handler = web.Application(middlewares=middlewares)
+        handler.add_routes([web.post("/hook", self.hook)])
 
-    host = ipaddress.ip_address(config["main"].get("host", "::"))
-    port = int(config["main"].get("port", "5000"))
-    hostport = ("[%s]:%d" if host.version == 6 else "%s:%d") % (host, port)
+        runner = web.AppRunner(handler)
+        await runner.setup()
 
-    middlewares: list[Middleware] = []
+        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        sock.bind((self.host, self.port))
+        self.site = web.SockSite(runner, sock)
+        await self.site.start()
+        log.info("Listening on %s", hostport)
 
-    if "secret" in config["main"]:
-        log.debug("Enabled webhook signature verification")
-        middlewares.append(verify_drone_signature(config["main"]["secret"].encode()))
+    async def stop(self) -> None:
+        """
+        Shut down the notification agent
+        """
+        log.info("Stopping...")
+        if self.site is not None:
+            await self.site.stop()
+        if self.bots is not None:
+            await asyncio.gather(*[bot.stop() for bot in self.bots])
 
-    # Drone adds the `Digest:` header to all of it's requests
-    middlewares.append(DigestVerifier(require=True))
+    async def do_notify(self, event: WebhookRequest) -> None:
+        """
+        Dispatch notifications to all notifiers
+        """
+        if event.build is None or event.repo is None or event.system is None:
+            # Satisfy type checkers. We already checked these
+            return
+        if "[NOTIFY SKIP]" in event.build.message or "[SKIP NOTIFY]" in event.build.message:
+            log.debug("Skipping notification as commit message requested it")
+            return
 
-    handler = web.Application(middlewares=middlewares)
-    handler.add_routes([web.post("/hook", hook)])
+        filtered = list(filter(lambda n: n.should_notify(event.build, event.repo), self.notifiers))
+        if not filtered:
+            log.info("No matching notifiers for %s #%d", event.repo.slug, event.build.number)
+            return
 
-    runner = web.AppRunner(handler)
-    await runner.setup()
+        message = generate_msg(event)
+        await asyncio.gather(*(map(lambda n: n.send(message), filtered)))
 
-    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-    sock.bind((str(host), port))
-    site = web.SockSite(runner, sock)
-    await site.start()
-    log.info("Listening on %s", hostport)
+    async def hook(self, request: web.Request) -> web.StreamResponse:
+        """
+        Handle incoming webhooks from (hopefully) Drone
+        """
+        data = await request.json()
+        log.debug("Received a webhook request from %s: %s", request.remote, data)
+        event = WebhookRequest.from_dict(data)
+        if event.event is WebhookEvent.BUILD:
+            log.debug(
+                "%s - Successfully parsed a webook for %s #%d (%s)",
+                request.remote,
+                event.repo.slug,
+                event.build.number,
+                event.build.status,
+            )
+
+            if event.build.status in VALID_BUILD_STATES:
+                await self.do_notify(event)
+                log.debug("Returning %s to %s", event.build.status, request.remote)
+                return web.Response(body=event.build.status)
+
+        # Default to blackholing it. Om nom nom.
+        log.debug("Not a valid build state, accepting & taking no action")
+        return web.Response(body=b"accepted")
 
 
 if __name__ == "__main__":
@@ -217,12 +246,16 @@ if __name__ == "__main__":
         log.error("Required value `channels.default' empty or unset")
         sys.exit(1)
 
+    host = config["main"].get("host", "::")
+    port = int(config["main"].get("port", "5000"))
+
     botconfig = telegram.TelegramBotConfig(bot_token=config["main"]["token"])
     tgbot = telegram.TelegramBot("bot", botconfig)
+    bots: list[Bot] = [tgbot]
 
     # Use the default notifier for all repos, except those explicitly overriden by other notifiers
     default_repos = list(map(lambda r: "!" + r, config["channels"].keys() - {"default", "failure"}))
-    channels = [
+    channels: list[Notifier[NotifierConfig]] = [
         telegram.TelegramNotifier(
             "default",
             tgbot,
@@ -248,17 +281,20 @@ if __name__ == "__main__":
         )
         channels.append(telegram.TelegramNotifier(repo, tgbot, channelconfig))
 
+    dn = DroneNotifier(host, port, bots, channels, webhook_secret=config.get("main", "secret"))
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.add_signal_handler(signal.SIGTERM, loop.stop)
         loop.add_signal_handler(signal.SIGINT, loop.stop)
-        loop.run_until_complete(startup())
+        loop.run_until_complete(dn.start())
         loop.run_forever()
     except KeyboardInterrupt:
         log.info("Caught ^C, stopping")
+        loop.run_until_complete(dn.stop())
         loop.stop()
     except Exception as e:  # pylint: disable=broad-except
         log.exception("Caught exception, stopping: %s", e)
+        loop.run_until_complete(dn.stop())
         loop.stop()
         sys.exit(1)
