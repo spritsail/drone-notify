@@ -1,0 +1,4 @@
+*.sqlite
+Dockerfile
+README.md
+notify.toml*

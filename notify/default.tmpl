@@ -1,0 +1,16 @@
+{{ $emojis := dict "success" "✅" "failure" "❌" "error" "💢" "killed" "☠️" "running" "▶️" "skipped" "🚫" "pending" "⏳" }}
+{{ get $emojis .Build.Status }} <b>{{ .Repo.Slug }} [{{ if eq .Build.Event "pull_request" }}{{ .Build.Source }} (#{{ trimSuffix "/head" (trimPrefix "refs/pull/" .Build.Ref) }}) → {{ end }}{{ .Build.Target }}]</b> #{{ .Build.Number }}: <b>{{ upper .Build.Status }}</b> in {{ duration (sub .Build.Finished .Build.Started) }}<br/>
+<a href="{{ .System.Link }}/{{ .Repo.Slug }}/{{ .Build.Number }}">{{ .System.Link }}/{{ .Repo.Slug }}/{{ .Build.Number }}</a><br/>
+{{- if gt (len .Build.Stages) 1 }}
+<br/>
+  {{- range .Build.Stages }}
+• <a href="{{ $.System.Link }}/{{ $.Repo.Slug }}/{{ $.Build.Number }}/{{ .Number }}">{{ .Name }}</a> <b>{{ .Status }}</b> in {{ duration (sub .Stopped .Started) }} {{ get $emojis .Status }}<br/>
+  {{- end }}
+<br/>
+{{- end }}
+{{ $msg := splitn "\n" 2 (trim .Build.Message) }}
+<a href="{{ .Build.Link }}">#{{ substr 0 7 .Build.After }}</a> ({{ .Build.Author }}): <i>{{ trim $msg._0 }}</i>
+{{- if gt (len $msg) 1 }}
+{{ $body := splitList "\n" (trim $msg._1) }}
+<br/>-----<br/>{{ range $body }}{{ . }}<br/>{{ end }}
+{{- end }}

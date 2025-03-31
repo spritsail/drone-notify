@@ -1,0 +1,62 @@
+---
+kind: pipeline
+name: test
+
+steps:
+  - name: go test
+    image: golang:alpine
+    pull: always
+    commands:
+      - go test -tags goolm ./...
+
+---
+kind: pipeline
+name: default
+
+depends_on:
+  - test
+
+platform:
+  os: linux
+  arch: amd64
+
+steps:
+  - name: build
+    image: spritsail/docker-build
+    pull: always
+
+  - name: publish
+    image: spritsail/docker-publish
+    pull: always
+    settings:
+      repo: spritsail/drone-notify
+      tags:
+        - go
+      login: {from_secret: docker_login}
+    depends_on:
+      - build
+    when:
+      branch:
+        - go
+      event:
+        - push
+
+  - name: update-dockerhub-readme
+    image: jlesage/drone-push-readme
+    pull: always
+    settings:
+      username: {from_secret: docker_username}
+      password: {from_secret: docker_password}
+      repo: spritsail/drone-notify
+    depends_on:
+      - publish
+    when:
+      branch:
+        - master
+      event:
+        - push
+---
+kind: signature
+hmac: 0ebc816524a1d8d0167e9c8b80ecd42c5bdfa23b3d7fefc6afee5b54fc6daf0b
+
+...
