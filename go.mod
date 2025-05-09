@@ -7,15 +7,15 @@ require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/drone/drone v1.10.2-0.20250228115651-4f8596143406
 	github.com/go-fed/httpsig v1.1.0
-	github.com/mattn/go-sqlite3 v1.14.24
+	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/puzpuzpuz/xsync v1.5.2
 	github.com/rs/zerolog v1.34.0
 	go.mau.fi/util v0.8.6
-	maunium.net/go/mautrix v0.23.2
+	maunium.net/go/mautrix v0.23.3
 )
 
 require (
-	dario.cat/mergo v1.0.1 // indirect
+	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.3.1 // indirect
@@ -32,18 +32,18 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
-	github.com/petermattis/goid v0.0.0-20250319124200-ccd6737f222a // indirect
+	github.com/petermattis/goid v0.0.0-20250508124226-395b08cebbdb // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
-	github.com/spf13/cast v1.7.1 // indirect
+	github.com/spf13/cast v1.8.0 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	github.com/yuin/goldmark v1.7.8 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
-	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
-	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	github.com/yuin/goldmark v1.7.11 // indirect
+	golang.org/x/crypto v0.38.0 // indirect
+	golang.org/x/exp v0.0.0-20250506013437-ce4c2cf36ca6 // indirect
+	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/text v0.25.0 // indirect
 )
