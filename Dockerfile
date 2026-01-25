@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~
 
-FROM spritsail/alpine:3.22
+FROM spritsail/alpine:3.23
 
 ARG NOTIFY_VER=2.0
 
